@@ -9,6 +9,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `amazon_push.py` | Amazon EU: ES, DE, FR, IT, NL, BE, PL, SE, IE (+ UK) (Selling Partner API) | LWA refresh token | [docs/amazon_push.md](docs/amazon_push.md) |
 | `casadellibro_push.py` | Casa del Libro marketplace (Mirakl seller API) | API key | [docs/casadellibro_push.md](docs/casadellibro_push.md) |
 | `fnac_push.py` | Fnac marketplace: Fnac.es, Fnac.com... (Fnac Marketplace API v2.6) | partner ID + shop ID + key | [docs/fnac_push.md](docs/fnac_push.md) |
+| `abebooks_push.py` | AbeBooks / IberLibro (AbeBooks Inventory Update API) | username + API key | [docs/abebooks_push.md](docs/abebooks_push.md) |
 
 All scripts read the same product format, which is the scraper output in
 [products.example.json](products.example.json). They skip sold-out and
@@ -16,7 +17,7 @@ incomplete products, and they remember what they've already pushed so a re-run
 doesn't create duplicates.
 
 ```powershell
-pip install -r requirements.txt   # for eBay, Amazon, Casa del Libro and Fnac; the Vinted script uses only the standard library
+pip install -r requirements.txt   # for every pusher except Vinted, which uses only the standard library
 ```
 
 ---
@@ -155,9 +156,29 @@ python fnac_push.py push --resend     # later: re-send everything to sync price 
 
 ---
 
+## AbeBooks / IberLibro quick start
+
+AbeBooks listings describe your own copy of a book, so no catalog match is
+needed, and books without an ISBN work too. IberLibro is AbeBooks' Spanish
+site and shows the same inventory. **AbeBooks has no test environment**, so
+start with `--dry-run` and `--limit 1`.
+
+```powershell
+$env:ABEBOOKS_USERNAME = "..."
+$env:ABEBOOKS_API_KEY  = "..."
+
+python abebooks_push.py push --dry-run                    # writes abebooks_request.xml (key hidden)
+python abebooks_push.py push --limit 1                    # one real listing; check it on IberLibro
+python abebooks_push.py push                              # the rest
+python abebooks_push.py push --resend --delete-sold-out   # later: sync price and stock, remove sold-out books
+python abebooks_push.py delete 142534                     # remove a listing
+```
+
+---
+
 ## First run with real credentials
 
-All five scripts have only been tested against local mocks of the APIs. Before you
+All six scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -180,6 +201,9 @@ push your whole catalogue, try one item at a time:
   1. `check` logs in.
   2. `push --dry-run` builds the XML. Look through it.
   3. `push --limit 1` reports the offer as accepted, and `status` shows it as `LIVE`.
+- **AbeBooks / IberLibro:**
+  1. `push --dry-run` builds the request. Look through it.
+  2. `push --limit 1` returns code `600`. Find the book in your seller account or on IberLibro.
 
 ## Tests
 
@@ -189,8 +213,9 @@ python tests\test_ebay.py
 python tests\test_amazon.py
 python tests\test_casadellibro.py
 python tests\test_fnac.py
+python tests\test_abebooks.py
 ```
 
 Each test starts a fake API on `127.0.0.1:8765` and runs the script against
 [tests/test_products.json](tests/test_products.json). They need no
-credentials, and nothing is sent to Vinted, eBay, Amazon, Casa del Libro or Fnac.
+credentials, and nothing is sent to any marketplace.

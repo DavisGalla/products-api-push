@@ -6,6 +6,8 @@ casadellibro_posted.json
 casadellibro_offers.csv
 fnac_posted.json
 fnac_offers.xml
+abebooks_posted.json
+abebooks_request.xml
 posted.json
 tests/run_pusher_tests.py
 
