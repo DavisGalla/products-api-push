@@ -7,6 +7,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `vinted_api_push.py` | Vinted (Vinted Pro Integrations API) | API token | [docs/vinted_api_push.md](docs/vinted_api_push.md) |
 | `ebay_push.py` | eBay EU (Sell Inventory API) | OAuth refresh token | [docs/ebay_push.md](docs/ebay_push.md) |
 | `amazon_push.py` | Amazon EU: ES, DE, FR, IT, NL, BE, PL, SE, IE (+ UK) (Selling Partner API) | LWA refresh token | [docs/amazon_push.md](docs/amazon_push.md) |
+| `casadellibro_push.py` | Casa del Libro marketplace (Mirakl seller API) | API key | [docs/casadellibro_push.md](docs/casadellibro_push.md) |
 
 All scripts read the same product format, which is the scraper output in
 [products.example.json](products.example.json). They skip sold-out and
@@ -14,7 +15,7 @@ incomplete products, and they remember what they've already pushed so a re-run
 doesn't create duplicates.
 
 ```powershell
-pip install -r requirements.txt   # for ebay_push.py and amazon_push.py; the Vinted script uses only the standard library
+pip install -r requirements.txt   # for eBay, Amazon and Casa del Libro; the Vinted script uses only the standard library
 ```
 
 ---
@@ -110,9 +111,29 @@ python amazon_push.py status
 
 ---
 
+## Casa del Libro quick start
+
+Casa del Libro's marketplace runs on Mirakl. Books are matched to Casa del
+Libro's catalog by EAN/ISBN, and your offers (price, stock, condition) are
+uploaded as a single import. Take the API key and your shop's API URL from the
+seller back office (user menu → *API Key*).
+
+```powershell
+$env:CASADELLIBRO_API_URL = "https://<instance>.mirakl.net"
+$env:CASADELLIBRO_API_KEY = "..."
+
+python casadellibro_push.py check            # key and URL work?
+python casadellibro_push.py push --dry-run   # writes casadellibro_offers.csv, uploads nothing
+python casadellibro_push.py push --limit 1   # one real offer
+python casadellibro_push.py status
+python casadellibro_push.py push --resend    # later: re-send everything to sync price and stock
+```
+
+---
+
 ## First run with real credentials
 
-All three scripts have only been tested against local mocks of the APIs. Before you
+All four scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -127,6 +148,10 @@ push your whole catalogue, try one item at a time:
   1. `push --validate-only` reports the offers as `VALID`.
   2. `push --limit 1` followed by `status` (after a few minutes) shows the offer as `LIVE`.
   3. `push --markets all --validate-only` shows which other stores accept the offers.
+- **Casa del Libro:**
+  1. `check` shows your shop.
+  2. `push --dry-run` builds the offer file. Look through it.
+  3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
 
 ## Tests
 
@@ -134,8 +159,9 @@ push your whole catalogue, try one item at a time:
 python tests\test_vinted_api.py
 python tests\test_ebay.py
 python tests\test_amazon.py
+python tests\test_casadellibro.py
 ```
 
 Each test starts a fake API on `127.0.0.1:8765` and runs the script against
 [tests/test_products.json](tests/test_products.json). They need no
-credentials, and nothing is sent to Vinted, eBay or Amazon.
+credentials, and nothing is sent to Vinted, eBay, Amazon or Casa del Libro.
