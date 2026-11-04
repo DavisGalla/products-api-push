@@ -1,0 +1,15 @@
+# Not part of this repo (other pushers / local-only)
+ebay_push.py
+vinted_push.py
+ebay_posted.json
+posted.json
+tests/run_pusher_tests.py
+
+# Local state and caches
+posted_api.json
+.vinted_ontologies.json
+.img_cache/
+.vinted_profile/
+__pycache__/
+*.pyc
+.env

@@ -1,0 +1,106 @@
+[
+  {
+    "id": "T-NEW",
+    "title": "Dragona. Libro para bebés con rimas",
+    "price_eur": 8.5,
+    "brand": "Cuentos con Valores",
+    "isbn": "9788409591923",
+    "condition": "NewCondition",
+    "sold_out": false,
+    "description": "Dragona. Libro para bebés con rimas. Cartoné (16 pág.)\nExplora los encantos de una joven dragona.",
+    "images": [
+      "http://127.0.0.1:8765/img/new-1.jpg"
+    ]
+  },
+  {
+    "id": "T-USED",
+    "title": "Colección de libros para bebés usada",
+    "price_eur": 12.5,
+    "brand": "Cuentos con Valores",
+    "isbn": "978-84-10413-29-0",
+    "condition": "UsedCondition",
+    "sold_out": false,
+    "description": "Seis libros de cartón en caja, usados pero en muy buen estado.",
+    "images": [
+      "http://127.0.0.1:8765/img/used-1.jpg",
+      "http://127.0.0.1:8765/img/used-2.jpg"
+    ]
+  },
+  {
+    "id": "T-REFURB",
+    "title": "Cuento restaurado de tapa dura",
+    "price_eur": 6,
+    "brand": "Editorial Ejemplo",
+    "condition": "RefurbishedCondition",
+    "sold_out": false,
+    "description": "Cuento con la tapa restaurada, interior en buen estado.",
+    "image": "http://127.0.0.1:8765/img/refurb-1.jpg"
+  },
+  {
+    "id": "T-LONG",
+    "title": "Libro de prueba con un titulo larguisimo Libro de prueba con un titulo larguisimo Libro de prueba con un titulo larguisimo Libro de prueba con un titulo larguisimo",
+    "price_eur": 15,
+    "brand": "Editorial Ejemplo",
+    "condition": "NewCondition",
+    "sold_out": false,
+    "description": "Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres. Descripcion muy larga para probar el limite de caracteres.",
+    "images": [
+      "http://127.0.0.1:8765/img/long-1.jpg"
+    ]
+  },
+  {
+    "id": "T-SOLD",
+    "title": "Libro agotado en origen",
+    "price_eur": 9,
+    "brand": "Editorial Ejemplo",
+    "condition": "NewCondition",
+    "sold_out": true,
+    "description": "Este libro está agotado.",
+    "images": [
+      "http://127.0.0.1:8765/img/sold-1.jpg"
+    ]
+  },
+  {
+    "id": "T-NOIMG",
+    "title": "Libro sin ninguna imagen",
+    "price_eur": 9,
+    "brand": "Editorial Ejemplo",
+    "condition": "NewCondition",
+    "sold_out": false,
+    "description": "No tiene imágenes."
+  },
+  {
+    "id": "T-SHORT",
+    "title": "Abc",
+    "price_eur": 4,
+    "brand": "Editorial Ejemplo",
+    "condition": "NewCondition",
+    "sold_out": false,
+    "description": "Corto",
+    "images": [
+      "http://127.0.0.1:8765/img/short-1.jpg"
+    ]
+  },
+  {
+    "id": "T-NOPRICE",
+    "title": "Libro sin precio indicado",
+    "price_eur": null,
+    "brand": "Editorial Ejemplo",
+    "condition": "NewCondition",
+    "sold_out": false,
+    "description": "Falta el precio.",
+    "images": [
+      "http://127.0.0.1:8765/img/noprice-1.jpg"
+    ]
+  },
+  {
+    "sku": "S-1",
+    "title": "Producto en formato simple",
+    "description": "Artículo descrito en el formato simple.",
+    "price": 5,
+    "brand": "Otros",
+    "image_urls": [
+      "http://127.0.0.1:8765/img/simple-1.jpg"
+    ]
+  }
+]
