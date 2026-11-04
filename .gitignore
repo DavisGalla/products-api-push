@@ -4,6 +4,8 @@ ebay_posted.json
 amazon_posted.json
 casadellibro_posted.json
 casadellibro_offers.csv
+fnac_posted.json
+fnac_offers.xml
 posted.json
 tests/run_pusher_tests.py
 
