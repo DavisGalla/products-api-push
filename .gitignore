@@ -1,6 +1,7 @@
 # Not part of this repo (other pushers / local-only)
 vinted_push.py
 ebay_posted.json
+amazon_posted.json
 posted.json
 tests/run_pusher_tests.py
 

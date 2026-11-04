@@ -34,7 +34,8 @@
     "condition": "RefurbishedCondition",
     "sold_out": false,
     "description": "Cuento con la tapa restaurada, interior en buen estado.",
-    "image": "http://127.0.0.1:8765/img/refurb-1.jpg"
+    "image": "http://127.0.0.1:8765/img/refurb-1.jpg",
+    "isbn": "9780000000002"
   },
   {
     "id": "T-LONG",

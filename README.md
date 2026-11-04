@@ -6,14 +6,15 @@ Push a JSON file of products to marketplaces through their official APIs:
 |---|---|---|---|
 | `vinted_api_push.py` | Vinted (Vinted Pro Integrations API) | API token | [docs/vinted_api_push.md](docs/vinted_api_push.md) |
 | `ebay_push.py` | eBay EU (Sell Inventory API) | OAuth refresh token | [docs/ebay_push.md](docs/ebay_push.md) |
+| `amazon_push.py` | Amazon EU: ES, DE, FR, IT, NL, BE, PL, SE, IE (+ UK) (Selling Partner API) | LWA refresh token | [docs/amazon_push.md](docs/amazon_push.md) |
 
-Both scripts read the same product format, which is the scraper output in
-[products.example.json](products.example.json). They skip sold-out products,
-products with no photos and products with no price, and they remember what
-they've already pushed so a re-run doesn't create duplicates.
+All scripts read the same product format, which is the scraper output in
+[products.example.json](products.example.json). They skip sold-out and
+incomplete products, and they remember what they've already pushed so a re-run
+doesn't create duplicates.
 
 ```powershell
-pip install -r requirements.txt   # only ebay_push.py needs this; the Vinted script uses only the standard library
+pip install -r requirements.txt   # for ebay_push.py and amazon_push.py; the Vinted script uses only the standard library
 ```
 
 ---
@@ -82,9 +83,36 @@ python ebay_push.py books.json --market EBAY_ES         # everything
 
 ---
 
+## Amazon EU quick start
+
+Books are matched to existing Amazon pages by ISBN in each marketplace, and
+your offer (price, condition, stock) is added to them. A book that a store
+doesn't have is skipped in that store only. One refresh token covers all EU
+stores. The steps for getting it are in
+[docs/amazon_push.md](docs/amazon_push.md#setup).
+
+Prices for SE (SEK), PL (PLN) and UK (GBP) are converted with `EUR_RATES` at
+the top of the script, so update those rates first.
+
+```powershell
+$env:AMAZON_LWA_CLIENT_ID     = "amzn1.application-oa2-client...."
+$env:AMAZON_LWA_CLIENT_SECRET = "..."
+$env:AMAZON_REFRESH_TOKEN     = "Atzr|..."
+$env:AMAZON_SELLER_ID         = "A1B2C3D4E5F6G7"
+
+python amazon_push.py push --validate-only                  # Amazon.es check, nothing is listed
+python amazon_push.py push --limit 1                        # one real offer on Amazon.es
+python amazon_push.py push --markets ES,DE,FR               # chosen stores
+python amazon_push.py push --markets all --validate-only    # all 9 EU stores, check only
+python amazon_push.py push --markets all                    # all 9 EU stores
+python amazon_push.py status
+```
+
+---
+
 ## First run with real credentials
 
-Both scripts have only been tested against local mocks of the APIs. Before you
+All three scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -95,14 +123,19 @@ push your whole catalogue, try one item at a time:
   1. `--no-publish --limit 1` creates an offer without errors.
   2. `--limit 1` publishes one listing. Check it on eBay, especially the
      category and any required aspects such as Author.
+- **Amazon:**
+  1. `push --validate-only` reports the offers as `VALID`.
+  2. `push --limit 1` followed by `status` (after a few minutes) shows the offer as `LIVE`.
+  3. `push --markets all --validate-only` shows which other stores accept the offers.
 
 ## Tests
 
 ```powershell
 python tests\test_vinted_api.py
 python tests\test_ebay.py
+python tests\test_amazon.py
 ```
 
 Each test starts a fake API on `127.0.0.1:8765` and runs the script against
 [tests/test_products.json](tests/test_products.json). They need no
-credentials, and nothing is sent to Vinted or eBay.
+credentials, and nothing is sent to Vinted, eBay or Amazon.
