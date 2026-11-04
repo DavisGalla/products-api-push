@@ -1,5 +1,4 @@
 # Not part of this repo (other pushers / local-only)
-ebay_push.py
 vinted_push.py
 ebay_posted.json
 posted.json

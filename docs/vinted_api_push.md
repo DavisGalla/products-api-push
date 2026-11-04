@@ -237,7 +237,7 @@ Vinted rejects old timestamps, so your computer's clock must be correct.
 - **Photos must be public URLs.** The API has no upload endpoint, so local files can't be sent.
 - **Creating items only.** Updating, deleting, orders and webhooks aren't implemented, although the API supports them.
 - **Ontologies v1 is used.** Vinted asks integrators to stay on v1 until told to switch.
-- **The script hasn't been run against the real API yet.** Follow the first-run checks in the [README](../README.md#first-run-with-a-real-token).
+- **The script hasn't been run against the real API yet.** Follow the first-run checks in the [README](../README.md#first-run-with-real-credentials).
 
 ## Testing
 
