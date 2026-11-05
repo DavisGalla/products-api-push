@@ -13,6 +13,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `elcorteingles_push.py` | El Corte Inglés marketplace (Mirakl seller API) | API key | [docs/elcorteingles_push.md](docs/elcorteingles_push.md) |
 | `carrefour_push.py` | Carrefour marketplace (Mirakl seller API) | API key | [docs/carrefour_push.md](docs/carrefour_push.md) |
 | `worten_push.py` | Worten marketplace, Portugal + Spain (Mirakl seller API) | API key | [docs/worten_push.md](docs/worten_push.md) |
+| `ibs_push.py` | IBS.it marketplace, Italy (Mirakl seller API) | API key | [docs/ibs_push.md](docs/ibs_push.md) |
 | `kaufland_push.py` | Kaufland.es and other Kaufland storefronts (Kaufland Seller API v2) | client key + secret key | [docs/kaufland_push.md](docs/kaufland_push.md) |
 | `aliexpress_push.py` | AliExpress as a local seller, e.g. aliexpress.es (AliExpress Open Platform API) | app key + secret, seller authorization (OAuth) | [docs/aliexpress_push.md](docs/aliexpress_push.md) |
 | `temu_push.py` | Temu as a local seller in Europe, e.g. temu.com/es (Temu Partner API) | app key + secret + access token from Seller Center | [docs/temu_push.md](docs/temu_push.md) |
@@ -250,6 +251,26 @@ python worten_push.py status
 
 ---
 
+## IBS.it quick start
+
+IBS.it (Italy) also runs on Mirakl, so this works like the Carrefour and Worten
+pushers: books are matched to IBS's catalog by EAN/ISBN, and offers are
+uploaded as one import. IBS approves sellers itself (professional sellers with
+a VAT number). Take the API key and your shop's API URL from the seller back
+office.
+
+```powershell
+$env:IBS_API_URL = "https://<instance>.mirakl.net"
+$env:IBS_API_KEY = "..."
+
+python ibs_push.py check            # key and URL work?
+python ibs_push.py push --dry-run   # writes ibs_offers.csv, uploads nothing
+python ibs_push.py push --limit 1   # one real offer
+python ibs_push.py status
+```
+
+---
+
 ## Kaufland.es quick start
 
 Books are matched to Kaufland's catalog by EAN/ISBN, and an offer ("unit") is
@@ -337,7 +358,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All twelve scripts have only been tested against local mocks of the APIs. Before you
+All thirteen scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -375,6 +396,10 @@ push your whole catalogue, try one item at a time:
   1. `check` shows your shop, and `states` confirms `11` is "New".
   2. `push --dry-run` shows which books are in Worten's catalog.
   3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
+- **IBS.it:**
+  1. `check` shows your shop, and `states` confirms `11` is "New".
+  2. `push --dry-run` shows which books are in IBS's catalog.
+  3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
 - **Kaufland:**
   1. `check` accepts the keys and lists `es`.
   2. `push --dry-run` shows which books are in Kaufland's catalog.
@@ -400,6 +425,7 @@ python tests\test_abebooks.py
 python tests\test_elcorteingles.py
 python tests\test_carrefour.py
 python tests\test_worten.py
+python tests\test_ibs.py
 python tests\test_kaufland.py
 python tests\test_aliexpress.py
 python tests\test_temu.py

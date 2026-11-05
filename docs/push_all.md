@@ -46,6 +46,7 @@ push_all.py ── push_all_config.json (what to run)
         ├─► elcorteingles_push.py push … │
         ├─► carrefour_push.py push …     │
         ├─► worten_push.py push …        │
+        ├─► ibs_push.py push …           │
         ├─► kaufland_push.py push …      │
         ├─► aliexpress_push.py push …    │
         └─► temu_push.py push …          ─┘
@@ -85,6 +86,7 @@ One pusher failing doesn't stop the others.
     "elcorteingles": {"enabled": false, "args": []},
     "carrefour":     {"enabled": false, "args": []},
     "worten":        {"enabled": false, "args": []},
+    "ibs":           {"enabled": false, "args": []},
     "kaufland":      {"enabled": false, "args": ["--storefront", "es"]},
     "aliexpress":    {"enabled": false, "args": []},
     "temu":          {"enabled": false, "args": []}
@@ -188,7 +190,7 @@ to *Password Manager* and *Admin Console*.
    | `GMAIL_ADDRESS` | sender Gmail address |
    | `GMAIL_APP_PASSWORD` | Gmail App Password (see [Setup](#setup)) |
    | `REPORT_TO` | optional, comma-separated recipients |
-   | `VINTED_PRO_TOKEN`, `EBAY_…`, `AMAZON_…`, `CASADELLIBRO_…`, `FNAC_…`, `ABEBOOKS_…`, `ELCORTEINGLES_…`, `CARREFOUR_…`, `WORTEN_…`, `KAUFLAND_…`, `ALIEXPRESS_…`, `TEMU_…` | marketplace credentials, added when you have them |
+   | `VINTED_PRO_TOKEN`, `EBAY_…`, `AMAZON_…`, `CASADELLIBRO_…`, `FNAC_…`, `ABEBOOKS_…`, `ELCORTEINGLES_…`, `CARREFOUR_…`, `WORTEN_…`, `IBS_…`, `KAUFLAND_…`, `ALIEXPRESS_…`, `TEMU_…` | marketplace credentials, added when you have them |
 
 4. **Machine account.** Choose **Machine accounts → New** and name it, for
    example, `product-pushers-server`.
@@ -299,8 +301,8 @@ bws run -- python push_all.py --no-email              # real run, report printed
 ```
 
 `--dry-run` runs each pusher in its safe mode: `--validate-only` for Vinted
-and Amazon, `--dry-run` for the rest. Casa del Libro, El Corte Inglés, Carrefour and Worten
-still need credentials in dry-run mode, because they check the catalog. AliExpress
+and Amazon, `--dry-run` for the rest. Casa del Libro, El Corte Inglés, Carrefour, Worten and
+IBS.it still need credentials in dry-run mode, because they check the catalog. AliExpress
 builds its preview without credentials, but then skips the EAN lookup. Temu builds its
 preview without credentials too, with placeholders for the category template.
 

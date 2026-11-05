@@ -20,7 +20,7 @@ other documents in `docs/`.
 
 ## Purpose
 
-Book products scraped from a source shop are listed automatically on twelve
+Book products scraped from a source shop are listed automatically on thirteen
 marketplaces through their **official seller APIs**. After every run, one
 email reports what happened on each marketplace.
 
@@ -40,6 +40,7 @@ flowchart LR
     R --> EC[elcorteingles_push.py] --> ECA[El Corte Inglés<br>Mirakl API]
     R --> CF[carrefour_push.py] --> CFA[Carrefour<br>Mirakl API]
     R --> W[worten_push.py] --> WA[Worten PT/ES<br>Mirakl API]
+    R --> IB[ibs_push.py] --> IBA[IBS.it<br>Mirakl API]
     R --> K[kaufland_push.py] --> KA[Kaufland.es<br>Seller API v2]
     R --> AE[aliexpress_push.py] --> AEA[AliExpress<br>Open Platform API]
     R --> TM[temu_push.py] --> TMA[Temu<br>Partner API]
@@ -50,7 +51,7 @@ flowchart LR
 The solution has three layers:
 
 1. **Input**: the scraper's products JSON, plus the run configuration.
-2. **Pushers**: twelve independent scripts, one per marketplace. Each turns the
+2. **Pushers**: thirteen independent scripts, one per marketplace. Each turns the
    common product format into that marketplace's API calls.
 3. **Orchestration and reporting**: `push_all.py` runs the enabled pushers,
    works out each one's result, saves logs, and emails one report through
@@ -66,7 +67,7 @@ stored in the code, the repository, or the configuration.
 | Scraper (separate project) | Produces `books.json`: id, title, price, ISBN, condition, images, stock | Python |
 | `push_all_config.json` | Which pushers run, their options, products file, report recipients, timeouts | JSON, not in git |
 | **`push_all.py`** | Runs the pushers one after another, counts results, writes logs, sends the email, prevents overlapping runs | Python standard library only |
-| 12 pushers (`*_push.py`) | One per marketplace: validate products, match the catalog, create or update listings, record what was pushed | Python + `requests` (Vinted: standard library) |
+| 13 pushers (`*_push.py`) | One per marketplace: validate products, match the catalog, create or update listings, record what was pushed | Python + `requests` (Vinted: standard library) |
 | State files (`*_posted.json`) | Per marketplace, what has already been pushed, so re-runs don't duplicate | JSON, local, not in git |
 | Bitwarden Secrets Manager + `bws` | Stores all credentials and injects them as environment variables at start-up | Bitwarden cloud, `bws` 2.1.0 |
 | Gmail account | Sends the report (SMTP, port 465, TLS, App Password) | Gmail |
@@ -90,6 +91,7 @@ doesn't contain any marketplace logic.
 | El Corte Inglés | Mirakl seller API | API key | Same flow as Casa del Libro | Mirakl standard; El Corte Inglés doesn't publish its own documentation |
 | Carrefour (ES; FR is a separate instance) | Mirakl seller API | API key | Same flow as Casa del Libro | Mirakl standard; Carrefour doesn't publish its own documentation |
 | Worten (Portugal + Spain, one shop) | Mirakl seller API | API key | Same flow as Casa del Libro; one price for both countries | Mirakl standard; Worten doesn't publish its own documentation |
+| IBS.it (Italy) | Mirakl seller API | API key | Same flow as Casa del Libro | Mirakl standard; IBS doesn't publish its own documentation |
 | Kaufland.es (other storefronts optional) | Kaufland Seller API v2 | Client key + secret key; every request is HMAC-SHA256 signed | Checks the catalog by EAN, then creates a unit (offer) per book; `id_offer` makes re-sends update it | Official, public |
 | AliExpress (local seller, aliexpress.es) | AliExpress Open Platform API | App key + secret (HMAC-SHA256 signed) and the seller's OAuth token, refreshed automatically | Creates its own product per book; category, attributes and images come from AliExpress's EAN database when it knows the ISBN | Official, public |
 | Temu (local seller, temu.com/es) | Temu Partner API (`bg.local.goods.*`) | App key + secret (MD5-signed requests) and the access token from Seller Center | Creates its own product per book in one configured category; Temu reviews the product and its price | Official docs need a seller login; built from a public daily mirror |
@@ -135,7 +137,7 @@ marketplace's rate limits, and one pusher failing doesn't stop the others.
   runner counts what was pushed.
 - **Updates:**
   - `--resend` re-sends price and stock (Casa del Libro, Fnac, AbeBooks,
-    El Corte Inglés, Carrefour, Worten, Kaufland, AliExpress, Temu). Vinted, eBay and Amazon only
+    El Corte Inglés, Carrefour, Worten, IBS.it, Kaufland, AliExpress, Temu). Vinted, eBay and Amazon only
     create listings so far; their APIs support updates (see
     [capabilities.md](capabilities.md)).
   - AbeBooks can also delete listings for books that are now sold out, and
@@ -176,7 +178,7 @@ The full setup steps are in
 |---|---|
 | One product is invalid | Skipped with its reason; the others continue |
 | A marketplace rejects one offer | Shown in the report with the marketplace's message; not recorded, so it's retried next run |
-| Temporary API error (429/5xx, AbeBooks 1xx) | Retried automatically with backoff by the Amazon, Casa del Libro, Fnac, AbeBooks, El Corte Inglés, Carrefour, Worten, Kaufland, AliExpress and Temu pushers. Vinted and eBay report the error, and the item is retried on the next run. |
+| Temporary API error (429/5xx, AbeBooks 1xx) | Retried automatically with backoff by the Amazon, Casa del Libro, Fnac, AbeBooks, El Corte Inglés, Carrefour, Worten, IBS.it, Kaufland, AliExpress and Temu pushers. Vinted and eBay report the error, and the item is retried on the next run. |
 | Wrong credentials or a pusher crash | That pusher is `FAILED`, with its last output lines in the email; the others still run |
 | A pusher hangs | Killed after `timeout_minutes`, reported as `FAILED` |
 | Two runs overlap | The second one stops (lock file) |
@@ -199,11 +201,12 @@ credentials, and doesn't contact any real API:
 | `test_elcorteingles.py` | Mirakl API | 21 |
 | `test_carrefour.py` | Mirakl API | 21 |
 | `test_worten.py` | Mirakl API | 21 |
+| `test_ibs.py` | Mirakl API | 21 |
 | `test_kaufland.py` | Kaufland Seller API (including HMAC signature verification) | 22 |
 | `test_aliexpress.py` | AliExpress Open Platform (signature, tokens, EAN lookup, photo upload, product post) | 26 |
 | `test_temu.py` | Temu Partner API (signature, category template, variation, photo upload, goods add, stock/price/sale status) | 22 |
 | `test_push_all.py` | Fake pushers + fake mail server | 24 |
-| **Total** | | **262, all passing** |
+| **Total** | | **283, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.
@@ -212,7 +215,7 @@ fields, limits, error codes, and asynchronous processing.
 
 | Part | Status |
 |---|---|
-| All 12 pushers | Built and passing their tests. **Not yet run against the real marketplaces**, because there are no seller accounts or API credentials yet. |
+| All 13 pushers | Built and passing their tests. **Not yet run against the real marketplaces**, because there are no seller accounts or API credentials yet. |
 | Runner + email report | Built and tested. **Verified for real on 2026-11-05**: credentials from Bitwarden, test email and dry-run report delivered through Gmail. |
 | Bitwarden Secrets Manager | Set up and working (project, machine account, token, `bws` 2.1.0). |
 | Server | Not yet deployed. The commands and steps are documented. |
@@ -226,12 +229,12 @@ fields, limits, error codes, and asynchronous processing.
 4. Deploy to the server and schedule it.
 
 **Known constraints:**
-- New books in Spain, Portugal, France and Germany have legally fixed prices, so
+- New books in Spain, Portugal, Italy, France and Germany have legally fixed prices, so
   `--price-factor` must not exceed the cover price.
 - Vinted, Amazon and the Mirakl marketplaces process listings asynchronously:
   "pushed" means accepted, and each pusher's `status` command shows the final
   state.
-- The El Corte Inglés, Carrefour and Worten API details are based on the Mirakl
+- The El Corte Inglés, Carrefour, Worten and IBS.it API details are based on the Mirakl
   standard, so their first real runs will confirm them.
 
 ## Adding a marketplace

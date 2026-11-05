@@ -152,7 +152,7 @@ def run(tmp, *args):
     env = {k: v for k, v in os.environ.items()
            if not k.startswith(("GMAIL_", "SMTP_", "REPORT_TO", "VINTED_", "AMAZON_", "FNAC_",
                                 "ABEBOOKS_", "CASADELLIBRO_", "EBAY_", "ELCORTEINGLES_", "CARREFOUR_",
-                                "KAUFLAND_", "WORTEN_", "ALIEXPRESS_", "TEMU_", "PUSHERS_"))}
+                                "KAUFLAND_", "WORTEN_", "ALIEXPRESS_", "TEMU_", "IBS_", "PUSHERS_"))}
     p = subprocess.run([sys.executable, "push_all.py", *args], cwd=tmp, env=env, capture_output=True,
                        text=True, encoding="utf-8", errors="replace", timeout=120)
     return p.returncode, p.stdout + p.stderr
