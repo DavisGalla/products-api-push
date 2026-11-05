@@ -11,6 +11,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `fnac_push.py` | Fnac marketplace: Fnac.es, Fnac.com... (Fnac Marketplace API v2.6) | partner ID + shop ID + key | [docs/fnac_push.md](docs/fnac_push.md) |
 | `abebooks_push.py` | AbeBooks / IberLibro (AbeBooks Inventory Update API) | username + API key | [docs/abebooks_push.md](docs/abebooks_push.md) |
 | `elcorteingles_push.py` | El Corte Inglés marketplace (Mirakl seller API) | API key | [docs/elcorteingles_push.md](docs/elcorteingles_push.md) |
+| `carrefour_push.py` | Carrefour marketplace (Mirakl seller API) | API key | [docs/carrefour_push.md](docs/carrefour_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
@@ -202,6 +203,25 @@ python elcorteingles_push.py push --resend    # later: re-send everything to syn
 
 ---
 
+## Carrefour quick start
+
+Carrefour's marketplace also runs on Mirakl, so this works like the Casa del
+Libro and El Corte Inglés pushers: books are matched to Carrefour's catalog by
+EAN/ISBN, and offers are uploaded as one import. Take the API key and your
+shop's API URL from the seller back office.
+
+```powershell
+$env:CARREFOUR_API_URL = "https://<instance>.mirakl.net"
+$env:CARREFOUR_API_KEY = "..."
+
+python carrefour_push.py check            # key and URL work?
+python carrefour_push.py push --dry-run   # writes carrefour_offers.csv, uploads nothing
+python carrefour_push.py push --limit 1   # one real offer
+python carrefour_push.py status
+```
+
+---
+
 ## Run everything and get an email report
 
 Credentials (Gmail and the marketplaces) are stored in **Bitwarden Secrets
@@ -224,7 +244,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All seven scripts have only been tested against local mocks of the APIs. Before you
+All eight scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -254,6 +274,10 @@ push your whole catalogue, try one item at a time:
   1. `check` shows your shop, and `states` confirms `11` is "New".
   2. `push --dry-run` builds the offer file. Look through it.
   3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
+- **Carrefour:**
+  1. `check` shows your shop, and `states` confirms `11` is "New".
+  2. `push --dry-run` shows which books are in Carrefour's catalog.
+  3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
 
 ## Tests
 
@@ -264,6 +288,9 @@ python tests\test_amazon.py
 python tests\test_casadellibro.py
 python tests\test_fnac.py
 python tests\test_abebooks.py
+python tests\test_elcorteingles.py
+python tests\test_carrefour.py
+python tests\test_push_all.py
 ```
 
 Each pusher test starts a fake API on `127.0.0.1:8765` and runs the script against

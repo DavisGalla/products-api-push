@@ -68,6 +68,9 @@ PUSHERS = {
     "elcorteingles": dict(label="El Corte Inglés", script="elcorteingles_push.py", sub=True, yes=True,
                           state="elcorteingles_posted.json", dry=["--dry-run"],
                           env=["ELCORTEINGLES_API_URL", "ELCORTEINGLES_API_KEY"]),
+    "carrefour": dict(label="Carrefour", script="carrefour_push.py", sub=True, yes=True,
+                      state="carrefour_posted.json", dry=["--dry-run"],
+                      env=["CARREFOUR_API_URL", "CARREFOUR_API_KEY"]),
 }
 
 RE_SKIP = re.compile(r"\bSKIP\b")

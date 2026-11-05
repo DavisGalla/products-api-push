@@ -12,6 +12,7 @@
     "casadellibro":  {"enabled": false, "args": []},
     "fnac":          {"enabled": false, "args": []},
     "abebooks":      {"enabled": false, "args": []},
-    "elcorteingles": {"enabled": false, "args": []}
+    "elcorteingles": {"enabled": false, "args": []},
+    "carrefour":     {"enabled": false, "args": []}
   }
 }

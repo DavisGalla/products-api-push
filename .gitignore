@@ -21,6 +21,8 @@ __pycache__/
 .env
 elcorteingles_posted.json
 elcorteingles_offers.csv
+carrefour_posted.json
+carrefour_offers.csv
 
 # push_all runner (local config, credentials, logs)
 push_all_config.json
