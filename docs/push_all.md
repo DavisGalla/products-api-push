@@ -47,7 +47,8 @@ push_all.py ── push_all_config.json (what to run)
         ├─► carrefour_push.py push …     │
         ├─► worten_push.py push …        │
         ├─► kaufland_push.py push …      │
-        └─► aliexpress_push.py push …    ─┘
+        ├─► aliexpress_push.py push …    │
+        └─► temu_push.py push …          ─┘
         │
         ├─► logs/<date_time>/<pusher>.log + report.txt
         └─► Gmail (SMTP) ─► report email
@@ -85,7 +86,8 @@ One pusher failing doesn't stop the others.
     "carrefour":     {"enabled": false, "args": []},
     "worten":        {"enabled": false, "args": []},
     "kaufland":      {"enabled": false, "args": ["--storefront", "es"]},
-    "aliexpress":    {"enabled": false, "args": []}
+    "aliexpress":    {"enabled": false, "args": []},
+    "temu":          {"enabled": false, "args": []}
   }
 }
 ```
@@ -186,7 +188,7 @@ to *Password Manager* and *Admin Console*.
    | `GMAIL_ADDRESS` | sender Gmail address |
    | `GMAIL_APP_PASSWORD` | Gmail App Password (see [Setup](#setup)) |
    | `REPORT_TO` | optional, comma-separated recipients |
-   | `VINTED_PRO_TOKEN`, `EBAY_…`, `AMAZON_…`, `CASADELLIBRO_…`, `FNAC_…`, `ABEBOOKS_…`, `ELCORTEINGLES_…`, `CARREFOUR_…`, `WORTEN_…`, `KAUFLAND_…`, `ALIEXPRESS_…` | marketplace credentials, added when you have them |
+   | `VINTED_PRO_TOKEN`, `EBAY_…`, `AMAZON_…`, `CASADELLIBRO_…`, `FNAC_…`, `ABEBOOKS_…`, `ELCORTEINGLES_…`, `CARREFOUR_…`, `WORTEN_…`, `KAUFLAND_…`, `ALIEXPRESS_…`, `TEMU_…` | marketplace credentials, added when you have them |
 
 4. **Machine account.** Choose **Machine accounts → New** and name it, for
    example, `product-pushers-server`.
@@ -299,7 +301,8 @@ bws run -- python push_all.py --no-email              # real run, report printed
 `--dry-run` runs each pusher in its safe mode: `--validate-only` for Vinted
 and Amazon, `--dry-run` for the rest. Casa del Libro, El Corte Inglés, Carrefour and Worten
 still need credentials in dry-run mode, because they check the catalog. AliExpress
-builds its preview without credentials, but then skips the EAN lookup.
+builds its preview without credentials, but then skips the EAN lookup. Temu builds its
+preview without credentials too, with placeholders for the category template.
 
 Exit codes are `0` when everything ran, `1` when a pusher failed, and `2` when
 the report email couldn't be sent. A scheduler can alert on non-zero.

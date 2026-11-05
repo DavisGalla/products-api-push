@@ -15,6 +15,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `worten_push.py` | Worten marketplace, Portugal + Spain (Mirakl seller API) | API key | [docs/worten_push.md](docs/worten_push.md) |
 | `kaufland_push.py` | Kaufland.es and other Kaufland storefronts (Kaufland Seller API v2) | client key + secret key | [docs/kaufland_push.md](docs/kaufland_push.md) |
 | `aliexpress_push.py` | AliExpress as a local seller, e.g. aliexpress.es (AliExpress Open Platform API) | app key + secret, seller authorization (OAuth) | [docs/aliexpress_push.md](docs/aliexpress_push.md) |
+| `temu_push.py` | Temu as a local seller in Europe, e.g. temu.com/es (Temu Partner API) | app key + secret + access token from Seller Center | [docs/temu_push.md](docs/temu_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
@@ -291,6 +292,29 @@ python aliexpress_push.py status
 
 ---
 
+## Temu quick start
+
+Temu also creates its own product per book, and reviews each new product and
+its price before it goes on sale. You need an approved self-developed app from
+partner-eu.temu.com (App Key and Secret, plus your server's IP registered).
+Then authorize the app in Seller Center and copy the Access Token. All books go
+into one Temu category: find it, then fill in its required attributes.
+
+```powershell
+$env:TEMU_APP_KEY = "..."
+$env:TEMU_APP_SECRET = "..."
+$env:TEMU_ACCESS_TOKEN = "..."
+
+python temu_push.py check                       # token, permissions, shipping template
+python temu_push.py categories --find book      # find the books category (or: recommend "<title>")
+python temu_push.py attributes <id>             # set CATEGORY_ID and PROPERTIES in the script
+python temu_push.py push --dry-run              # writes temu_products.json
+python temu_push.py push --limit 1              # one real product
+python temu_push.py status                      # price review / on sale?
+```
+
+---
+
 ## Run everything and get an email report
 
 Credentials (Gmail and the marketplaces) are stored in **Bitwarden Secrets
@@ -313,7 +337,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All eleven scripts have only been tested against local mocks of the APIs. Before you
+All twelve scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -359,6 +383,10 @@ push your whole catalogue, try one item at a time:
   1. `check` shows your shop, a shipping template and a GPSR responsible person.
   2. `ean <isbn>` shows whether AliExpress knows your books, and `push --dry-run` builds them.
   3. `push --limit 1 --no-online`, check the product in Seller Center, then `status`.
+- **Temu:**
+  1. `check` accepts the token and lists a shipping template.
+  2. `attributes <category>` shows what to put in `PROPERTIES`, and `push --dry-run` builds the products.
+  3. `push --limit 1`, then `status` until Temu's price review and product review are done.
 
 ## Tests
 
@@ -374,6 +402,7 @@ python tests\test_carrefour.py
 python tests\test_worten.py
 python tests\test_kaufland.py
 python tests\test_aliexpress.py
+python tests\test_temu.py
 python tests\test_push_all.py
 ```
 

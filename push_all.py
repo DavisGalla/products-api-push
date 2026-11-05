@@ -80,6 +80,9 @@ PUSHERS = {
     "aliexpress": dict(label="AliExpress", script="aliexpress_push.py", sub=True, yes=True,
                        state="aliexpress_posted.json", dry=["--dry-run"],
                        env=["ALIEXPRESS_APP_KEY", "ALIEXPRESS_APP_SECRET"]),
+    "temu": dict(label="Temu", script="temu_push.py", sub=True, yes=True,
+                 state="temu_posted.json", dry=["--dry-run"],
+                 env=["TEMU_APP_KEY", "TEMU_APP_SECRET", "TEMU_ACCESS_TOKEN"]),
 }
 
 RE_SKIP = re.compile(r"\bSKIP\b")
