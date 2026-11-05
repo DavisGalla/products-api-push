@@ -15,6 +15,7 @@
     "elcorteingles": {"enabled": false, "args": []},
     "carrefour":     {"enabled": false, "args": []},
     "worten":        {"enabled": false, "args": []},
-    "kaufland":      {"enabled": false, "args": ["--storefront", "es"]}
+    "kaufland":      {"enabled": false, "args": ["--storefront", "es"]},
+    "aliexpress":    {"enabled": false, "args": []}
   }
 }

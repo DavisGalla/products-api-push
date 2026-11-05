@@ -27,6 +27,10 @@ worten_posted.json
 worten_offers.csv
 kaufland_posted.json
 kaufland_units.json
+aliexpress_posted.json
+aliexpress_products.json
+aliexpress_token.json
+aliexpress_images.json
 
 # push_all runner (local config, credentials, logs)
 push_all_config.json

@@ -77,6 +77,9 @@ PUSHERS = {
     "kaufland": dict(label="Kaufland", script="kaufland_push.py", sub=True, yes=True,
                      state="kaufland_posted.json", dry=["--dry-run"],
                      env=["KAUFLAND_CLIENT_KEY", "KAUFLAND_SECRET_KEY"]),
+    "aliexpress": dict(label="AliExpress", script="aliexpress_push.py", sub=True, yes=True,
+                       state="aliexpress_posted.json", dry=["--dry-run"],
+                       env=["ALIEXPRESS_APP_KEY", "ALIEXPRESS_APP_SECRET"]),
 }
 
 RE_SKIP = re.compile(r"\bSKIP\b")

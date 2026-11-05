@@ -14,6 +14,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `carrefour_push.py` | Carrefour marketplace (Mirakl seller API) | API key | [docs/carrefour_push.md](docs/carrefour_push.md) |
 | `worten_push.py` | Worten marketplace, Portugal + Spain (Mirakl seller API) | API key | [docs/worten_push.md](docs/worten_push.md) |
 | `kaufland_push.py` | Kaufland.es and other Kaufland storefronts (Kaufland Seller API v2) | client key + secret key | [docs/kaufland_push.md](docs/kaufland_push.md) |
+| `aliexpress_push.py` | AliExpress as a local seller, e.g. aliexpress.es (AliExpress Open Platform API) | app key + secret, seller authorization (OAuth) | [docs/aliexpress_push.md](docs/aliexpress_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
@@ -267,6 +268,29 @@ python kaufland_push.py status           # LIVE? if not, Kaufland's reasons
 
 ---
 
+## AliExpress quick start
+
+AliExpress has no catalog to attach offers to, so every book becomes its own
+product. For ISBNs that AliExpress's EAN database knows, it supplies the
+category, attributes and images. You need a developer app (App Key and Secret)
+from openservice.aliexpress.com, and you authorize it once for your shop. You
+also need a shipping template and an EU responsible person (GPSR) in Seller
+Center.
+
+```powershell
+$env:ALIEXPRESS_APP_KEY = "..."
+$env:ALIEXPRESS_APP_SECRET = "..."
+
+python aliexpress_push.py auth-url --redirect https://your.callback/url   # open it, authorize
+python aliexpress_push.py token <code>                 # saves aliexpress_token.json
+python aliexpress_push.py check                        # shop, shipping template, GPSR
+python aliexpress_push.py push --dry-run               # writes aliexpress_products.json
+python aliexpress_push.py push --limit 1 --no-online   # one product, check it in Seller Center
+python aliexpress_push.py status
+```
+
+---
+
 ## Run everything and get an email report
 
 Credentials (Gmail and the marketplaces) are stored in **Bitwarden Secrets
@@ -289,7 +313,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All ten scripts have only been tested against local mocks of the APIs. Before you
+All eleven scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -331,6 +355,10 @@ push your whole catalogue, try one item at a time:
   1. `check` accepts the keys and lists `es`.
   2. `push --dry-run` shows which books are in Kaufland's catalog.
   3. `push --limit 1` followed by `status` shows the unit as `LIVE`, or Kaufland's reason it isn't.
+- **AliExpress:**
+  1. `check` shows your shop, a shipping template and a GPSR responsible person.
+  2. `ean <isbn>` shows whether AliExpress knows your books, and `push --dry-run` builds them.
+  3. `push --limit 1 --no-online`, check the product in Seller Center, then `status`.
 
 ## Tests
 
@@ -345,6 +373,7 @@ python tests\test_elcorteingles.py
 python tests\test_carrefour.py
 python tests\test_worten.py
 python tests\test_kaufland.py
+python tests\test_aliexpress.py
 python tests\test_push_all.py
 ```
 
