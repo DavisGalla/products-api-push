@@ -71,6 +71,9 @@ PUSHERS = {
     "carrefour": dict(label="Carrefour", script="carrefour_push.py", sub=True, yes=True,
                       state="carrefour_posted.json", dry=["--dry-run"],
                       env=["CARREFOUR_API_URL", "CARREFOUR_API_KEY"]),
+    "kaufland": dict(label="Kaufland", script="kaufland_push.py", sub=True, yes=True,
+                     state="kaufland_posted.json", dry=["--dry-run"],
+                     env=["KAUFLAND_CLIENT_KEY", "KAUFLAND_SECRET_KEY"]),
 }
 
 RE_SKIP = re.compile(r"\bSKIP\b")
@@ -164,7 +167,7 @@ def run_pusher(name, spec, settings, cfg, a, log_dir):
            "problems": [], "tail": [], "exit_code": None, "seconds": 0, "log": None}
     missing = [k for k in required_env(name, spec, settings) if not os.environ.get(k)]
     # dry runs of these pushers build their files without credentials
-    if missing and not (a.dry_run and name in ("fnac", "abebooks", "ebay")):
+    if missing and not (a.dry_run and name in ("fnac", "abebooks", "ebay", "kaufland")):
         res.update(status="NOT CONFIGURED", note="missing " + ", ".join(missing))
         return res
 

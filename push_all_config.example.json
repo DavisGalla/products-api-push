@@ -13,6 +13,7 @@
     "fnac":          {"enabled": false, "args": []},
     "abebooks":      {"enabled": false, "args": []},
     "elcorteingles": {"enabled": false, "args": []},
-    "carrefour":     {"enabled": false, "args": []}
+    "carrefour":     {"enabled": false, "args": []},
+    "kaufland":      {"enabled": false, "args": ["--storefront", "es"]}
   }
 }

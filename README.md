@@ -12,6 +12,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `abebooks_push.py` | AbeBooks / IberLibro (AbeBooks Inventory Update API) | username + API key | [docs/abebooks_push.md](docs/abebooks_push.md) |
 | `elcorteingles_push.py` | El Corte Inglés marketplace (Mirakl seller API) | API key | [docs/elcorteingles_push.md](docs/elcorteingles_push.md) |
 | `carrefour_push.py` | Carrefour marketplace (Mirakl seller API) | API key | [docs/carrefour_push.md](docs/carrefour_push.md) |
+| `kaufland_push.py` | Kaufland.es and other Kaufland storefronts (Kaufland Seller API v2) | client key + secret key | [docs/kaufland_push.md](docs/kaufland_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
@@ -222,6 +223,25 @@ python carrefour_push.py status
 
 ---
 
+## Kaufland.es quick start
+
+Books are matched to Kaufland's catalog by EAN/ISBN, and an offer ("unit") is
+created on the Spanish storefront. Every request is HMAC-signed with your
+keys. Get the Client Key and Secret Key in the Seller Portal under *Settings →
+API*, and set up a shipping group and a default warehouse first.
+
+```powershell
+$env:KAUFLAND_CLIENT_KEY = "..."
+$env:KAUFLAND_SECRET_KEY = "..."
+
+python kaufland_push.py check            # keys work, storefront es available?
+python kaufland_push.py push --dry-run   # writes kaufland_units.json, sends nothing
+python kaufland_push.py push --limit 1   # one real offer
+python kaufland_push.py status           # LIVE? if not, Kaufland's reasons
+```
+
+---
+
 ## Run everything and get an email report
 
 Credentials (Gmail and the marketplaces) are stored in **Bitwarden Secrets
@@ -244,7 +264,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All eight scripts have only been tested against local mocks of the APIs. Before you
+All nine scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -278,6 +298,10 @@ push your whole catalogue, try one item at a time:
   1. `check` shows your shop, and `states` confirms `11` is "New".
   2. `push --dry-run` shows which books are in Carrefour's catalog.
   3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
+- **Kaufland:**
+  1. `check` accepts the keys and lists `es`.
+  2. `push --dry-run` shows which books are in Kaufland's catalog.
+  3. `push --limit 1` followed by `status` shows the unit as `LIVE`, or Kaufland's reason it isn't.
 
 ## Tests
 
@@ -290,6 +314,7 @@ python tests\test_fnac.py
 python tests\test_abebooks.py
 python tests\test_elcorteingles.py
 python tests\test_carrefour.py
+python tests\test_kaufland.py
 python tests\test_push_all.py
 ```
 

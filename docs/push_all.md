@@ -44,7 +44,8 @@ push_all.py ── push_all_config.json (what to run)
         ├─► fnac_push.py push …          │
         ├─► abebooks_push.py push …      │
         ├─► elcorteingles_push.py push … │
-        └─► carrefour_push.py push …     ─┘
+        ├─► carrefour_push.py push …     │
+        └─► kaufland_push.py push …      ─┘
         │
         ├─► logs/<date_time>/<pusher>.log + report.txt
         └─► Gmail (SMTP) ─► report email
@@ -79,7 +80,8 @@ One pusher failing doesn't stop the others.
     "fnac":          {"enabled": false, "args": []},
     "abebooks":      {"enabled": true,  "args": []},
     "elcorteingles": {"enabled": false, "args": []},
-    "carrefour":     {"enabled": false, "args": []}
+    "carrefour":     {"enabled": false, "args": []},
+    "kaufland":      {"enabled": false, "args": ["--storefront", "es"]}
   }
 }
 ```
@@ -180,7 +182,7 @@ to *Password Manager* and *Admin Console*.
    | `GMAIL_ADDRESS` | sender Gmail address |
    | `GMAIL_APP_PASSWORD` | Gmail App Password (see [Setup](#setup)) |
    | `REPORT_TO` | optional, comma-separated recipients |
-   | `VINTED_PRO_TOKEN`, `EBAY_…`, `AMAZON_…`, `CASADELLIBRO_…`, `FNAC_…`, `ABEBOOKS_…`, `ELCORTEINGLES_…`, `CARREFOUR_…` | marketplace credentials, added when you have them |
+   | `VINTED_PRO_TOKEN`, `EBAY_…`, `AMAZON_…`, `CASADELLIBRO_…`, `FNAC_…`, `ABEBOOKS_…`, `ELCORTEINGLES_…`, `CARREFOUR_…`, `KAUFLAND_…` | marketplace credentials, added when you have them |
 
 4. **Machine account.** Choose **Machine accounts → New** and name it, for
    example, `product-pushers-server`.

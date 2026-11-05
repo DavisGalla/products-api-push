@@ -23,6 +23,8 @@ elcorteingles_posted.json
 elcorteingles_offers.csv
 carrefour_posted.json
 carrefour_offers.csv
+kaufland_posted.json
+kaufland_units.json
 
 # push_all runner (local config, credentials, logs)
 push_all_config.json
