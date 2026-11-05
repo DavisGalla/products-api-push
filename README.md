@@ -10,6 +10,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `casadellibro_push.py` | Casa del Libro marketplace (Mirakl seller API) | API key | [docs/casadellibro_push.md](docs/casadellibro_push.md) |
 | `fnac_push.py` | Fnac marketplace: Fnac.es, Fnac.com... (Fnac Marketplace API v2.6) | partner ID + shop ID + key | [docs/fnac_push.md](docs/fnac_push.md) |
 | `abebooks_push.py` | AbeBooks / IberLibro (AbeBooks Inventory Update API) | username + API key | [docs/abebooks_push.md](docs/abebooks_push.md) |
+| `elcorteingles_push.py` | El Corte Inglés marketplace (Mirakl seller API) | API key | [docs/elcorteingles_push.md](docs/elcorteingles_push.md) |
 
 All scripts read the same product format, which is the scraper output in
 [products.example.json](products.example.json). They skip sold-out and
@@ -176,9 +177,30 @@ python abebooks_push.py delete 142534                     # remove a listing
 
 ---
 
+## El Corte Inglés quick start
+
+El Corte Inglés's marketplace also runs on Mirakl, so this works like the Casa
+del Libro pusher. Books are matched to El Corte Inglés's catalog by EAN/ISBN,
+and your offers are uploaded as one import. Take the API key and your shop's
+API URL from the seller back office (user menu → *API Key*).
+
+```powershell
+$env:ELCORTEINGLES_API_URL = "https://<instance>.mirakl.net"
+$env:ELCORTEINGLES_API_KEY = "..."
+
+python elcorteingles_push.py check            # key and URL work?
+python elcorteingles_push.py states           # condition codes your shop uses
+python elcorteingles_push.py push --dry-run   # writes elcorteingles_offers.csv, uploads nothing
+python elcorteingles_push.py push --limit 1   # one real offer
+python elcorteingles_push.py status
+python elcorteingles_push.py push --resend    # later: re-send everything to sync price and stock
+```
+
+---
+
 ## First run with real credentials
 
-All six scripts have only been tested against local mocks of the APIs. Before you
+All seven scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -204,6 +226,10 @@ push your whole catalogue, try one item at a time:
 - **AbeBooks / IberLibro:**
   1. `push --dry-run` builds the request. Look through it.
   2. `push --limit 1` returns code `600`. Find the book in your seller account or on IberLibro.
+- **El Corte Inglés:**
+  1. `check` shows your shop, and `states` confirms `11` is "New".
+  2. `push --dry-run` builds the offer file. Look through it.
+  3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
 
 ## Tests
 

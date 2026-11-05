@@ -19,3 +19,5 @@ posted_api.json
 __pycache__/
 *.pyc
 .env
+elcorteingles_posted.json
+elcorteingles_offers.csv
