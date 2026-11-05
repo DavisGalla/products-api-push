@@ -14,6 +14,7 @@
     "abebooks":      {"enabled": false, "args": []},
     "elcorteingles": {"enabled": false, "args": []},
     "carrefour":     {"enabled": false, "args": []},
+    "worten":        {"enabled": false, "args": []},
     "kaufland":      {"enabled": false, "args": ["--storefront", "es"]}
   }
 }

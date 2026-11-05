@@ -12,11 +12,17 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `abebooks_push.py` | AbeBooks / IberLibro (AbeBooks Inventory Update API) | username + API key | [docs/abebooks_push.md](docs/abebooks_push.md) |
 | `elcorteingles_push.py` | El Corte Inglés marketplace (Mirakl seller API) | API key | [docs/elcorteingles_push.md](docs/elcorteingles_push.md) |
 | `carrefour_push.py` | Carrefour marketplace (Mirakl seller API) | API key | [docs/carrefour_push.md](docs/carrefour_push.md) |
+| `worten_push.py` | Worten marketplace, Portugal + Spain (Mirakl seller API) | API key | [docs/worten_push.md](docs/worten_push.md) |
 | `kaufland_push.py` | Kaufland.es and other Kaufland storefronts (Kaufland Seller API v2) | client key + secret key | [docs/kaufland_push.md](docs/kaufland_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
 [Run everything and get an email report](#run-everything-and-get-an-email-report).
+
+**What can be automated** (listings, sales, messages, leads, payouts) on each
+marketplace, and what stays manual:
+[docs/capabilities.md](docs/capabilities.md) and the PDF
+[docs/marketplace_capabilities.pdf](docs/marketplace_capabilities.pdf).
 
 All scripts read the same product format, which is the scraper output in
 [products.example.json](products.example.json). They skip sold-out and
@@ -223,6 +229,25 @@ python carrefour_push.py status
 
 ---
 
+## Worten quick start
+
+Worten (Portugal and Spain) also runs on Mirakl, so this works like the
+Carrefour pusher: books are matched to Worten's catalog by EAN/ISBN, and
+offers are uploaded as one import. One shop sells in both countries. Take the
+API key and your shop's API URL from the seller back office.
+
+```powershell
+$env:WORTEN_API_URL = "https://<instance>.mirakl.net"
+$env:WORTEN_API_KEY = "..."
+
+python worten_push.py check            # key and URL work?
+python worten_push.py push --dry-run   # writes worten_offers.csv, uploads nothing
+python worten_push.py push --limit 1   # one real offer
+python worten_push.py status
+```
+
+---
+
 ## Kaufland.es quick start
 
 Books are matched to Kaufland's catalog by EAN/ISBN, and an offer ("unit") is
@@ -264,7 +289,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All nine scripts have only been tested against local mocks of the APIs. Before you
+All ten scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -298,6 +323,10 @@ push your whole catalogue, try one item at a time:
   1. `check` shows your shop, and `states` confirms `11` is "New".
   2. `push --dry-run` shows which books are in Carrefour's catalog.
   3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
+- **Worten:**
+  1. `check` shows your shop, and `states` confirms `11` is "New".
+  2. `push --dry-run` shows which books are in Worten's catalog.
+  3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
 - **Kaufland:**
   1. `check` accepts the keys and lists `es`.
   2. `push --dry-run` shows which books are in Kaufland's catalog.
@@ -314,6 +343,7 @@ python tests\test_fnac.py
 python tests\test_abebooks.py
 python tests\test_elcorteingles.py
 python tests\test_carrefour.py
+python tests\test_worten.py
 python tests\test_kaufland.py
 python tests\test_push_all.py
 ```
