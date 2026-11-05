@@ -12,6 +12,10 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `abebooks_push.py` | AbeBooks / IberLibro (AbeBooks Inventory Update API) | username + API key | [docs/abebooks_push.md](docs/abebooks_push.md) |
 | `elcorteingles_push.py` | El Corte Inglés marketplace (Mirakl seller API) | API key | [docs/elcorteingles_push.md](docs/elcorteingles_push.md) |
 
+**`push_all.py`** runs all the enabled pushers in one go and emails one report
+from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
+[Run everything and get an email report](#run-everything-and-get-an-email-report).
+
 All scripts read the same product format, which is the scraper output in
 [products.example.json](products.example.json). They skip sold-out and
 incomplete products, and they remember what they've already pushed so a re-run
@@ -198,6 +202,26 @@ python elcorteingles_push.py push --resend    # later: re-send everything to syn
 
 ---
 
+## Run everything and get an email report
+
+Credentials (Gmail and the marketplaces) are stored in **Bitwarden Secrets
+Manager**. Bitwarden's `bws` tool fetches them when a run starts, so no
+credentials are stored in files.
+
+```powershell
+copy push_all_config.example.json push_all_config.json   # choose pushers, products file, recipients
+
+bws run -- python push_all.py --test-email           # Gmail works?
+bws run -- python push_all.py --dry-run --no-email   # every pusher in its safe mode, report printed
+bws run -- python push_all.py                        # real run, report emailed
+```
+
+Pushers without credentials are reported as `NOT CONFIGURED` and skipped.
+[docs/push_all.md](docs/push_all.md) covers the Bitwarden setup step by step,
+the Gmail App Password, a `.env` alternative, and scheduling on a server.
+
+---
+
 ## First run with real credentials
 
 All seven scripts have only been tested against local mocks of the APIs. Before you
@@ -242,6 +266,7 @@ python tests\test_fnac.py
 python tests\test_abebooks.py
 ```
 
-Each test starts a fake API on `127.0.0.1:8765` and runs the script against
+Each pusher test starts a fake API on `127.0.0.1:8765` and runs the script against
 [tests/test_products.json](tests/test_products.json). They need no
-credentials, and nothing is sent to any marketplace.
+credentials, and nothing is sent to any marketplace. `test_push_all.py` uses
+fake pushers and a fake mail server on `127.0.0.1:8766`.
