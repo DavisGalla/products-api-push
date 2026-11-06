@@ -18,6 +18,7 @@
     "ibs":           {"enabled": false, "args": []},
     "kaufland":      {"enabled": false, "args": ["--storefront", "es"]},
     "aliexpress":    {"enabled": false, "args": []},
-    "temu":          {"enabled": false, "args": []}
+    "temu":          {"enabled": false, "args": []},
+    "tiktok":        {"enabled": false, "args": []}
   }
 }

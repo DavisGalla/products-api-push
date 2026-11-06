@@ -86,6 +86,9 @@ PUSHERS = {
     "temu": dict(label="Temu", script="temu_push.py", sub=True, yes=True,
                  state="temu_posted.json", dry=["--dry-run"],
                  env=["TEMU_APP_KEY", "TEMU_APP_SECRET", "TEMU_ACCESS_TOKEN"]),
+    "tiktok": dict(label="TikTok Shop", script="tiktok_push.py", sub=True, yes=True,
+                   state="tiktok_posted.json", dry=["--dry-run"],
+                   env=["TIKTOK_APP_KEY", "TIKTOK_APP_SECRET"]),
 }
 
 RE_SKIP = re.compile(r"\bSKIP\b")

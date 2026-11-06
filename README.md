@@ -17,6 +17,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `kaufland_push.py` | Kaufland.es and other Kaufland storefronts (Kaufland Seller API v2) | client key + secret key | [docs/kaufland_push.md](docs/kaufland_push.md) |
 | `aliexpress_push.py` | AliExpress as a local seller, e.g. aliexpress.es (AliExpress Open Platform API) | app key + secret, seller authorization (OAuth) | [docs/aliexpress_push.md](docs/aliexpress_push.md) |
 | `temu_push.py` | Temu as a local seller in Europe, e.g. temu.com/es (Temu Partner API) | app key + secret + access token from Seller Center | [docs/temu_push.md](docs/temu_push.md) |
+| `tiktok_push.py` | TikTok Shop Spain and other EU shops (TikTok Shop Partner API) | app key + secret, seller authorization (OAuth) | [docs/tiktok_push.md](docs/tiktok_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
@@ -336,6 +337,30 @@ python temu_push.py status                      # price review / on sale?
 
 ---
 
+## TikTok Shop quick start
+
+TikTok Shop also creates its own product per book, and reviews each new product
+before it goes live. You need an app from partner.tiktokshop.com (App Key,
+App Secret and Service ID), authorized once for your shop. You also need a
+warehouse and, if the category requires it, an EU responsible person and
+manufacturer in Seller Center. All books go into one TikTok category: find it,
+then fill in its required attributes.
+
+```powershell
+$env:TIKTOK_APP_KEY = "..."
+$env:TIKTOK_APP_SECRET = "..."
+
+python tiktok_push.py auth-url --service-id <id>   # open it, authorize
+python tiktok_push.py token <code>                 # saves tiktok_token.json
+python tiktok_push.py check                        # shop, warehouse, GPSR
+python tiktok_push.py categories --find libro      # then: attributes <id>
+python tiktok_push.py push --dry-run               # writes tiktok_products.json
+python tiktok_push.py push --limit 1               # one real product
+python tiktok_push.py status
+```
+
+---
+
 ## Run everything and get an email report
 
 Credentials (Gmail and the marketplaces) are stored in **Bitwarden Secrets
@@ -358,7 +383,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All thirteen scripts have only been tested against local mocks of the APIs. Before you
+All fourteen scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -412,6 +437,10 @@ push your whole catalogue, try one item at a time:
   1. `check` accepts the token and lists a shipping template.
   2. `attributes <category>` shows what to put in `PROPERTIES`, and `push --dry-run` builds the products.
   3. `push --limit 1`, then `status` until Temu's price review and product review are done.
+- **TikTok Shop:**
+  1. `check` shows the shop, a warehouse and the GPSR responsible person and manufacturer.
+  2. `attributes <category>` shows what to put in `PRODUCT_ATTRIBUTES`, and `push --dry-run` builds the products.
+  3. `push --limit 1`, then `status` until TikTok's review shows it as `LIVE`.
 
 ## Tests
 
@@ -429,6 +458,7 @@ python tests\test_ibs.py
 python tests\test_kaufland.py
 python tests\test_aliexpress.py
 python tests\test_temu.py
+python tests\test_tiktok.py
 python tests\test_push_all.py
 ```
 

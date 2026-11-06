@@ -36,6 +36,10 @@ aliexpress_images.json
 temu_posted.json
 temu_products.json
 temu_cache.json
+tiktok_posted.json
+tiktok_products.json
+tiktok_token.json
+tiktok_cache.json
 
 # push_all runner (local config, credentials, logs)
 push_all_config.json
