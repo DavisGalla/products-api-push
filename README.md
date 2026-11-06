@@ -18,6 +18,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `kaufland_push.py` | Kaufland.es and other Kaufland storefronts (Kaufland Seller API v2) | client key + secret key | [docs/kaufland_push.md](docs/kaufland_push.md) |
 | `bol_push.py` | bol.com, Netherlands + Belgium (Retailer API, Offers v11) | client ID + secret | [docs/bol_push.md](docs/bol_push.md) |
 | `cdiscount_push.py` | Cdiscount, France (Octopia Seller API) | client ID + secret + seller ID | [docs/cdiscount_push.md](docs/cdiscount_push.md) |
+| `allegro_push.py` | Allegro, Poland (Allegro REST API; prices converted to PLN) | client ID + secret, one-time device authorization | [docs/allegro_push.md](docs/allegro_push.md) |
 | `aliexpress_push.py` | AliExpress as a local seller, e.g. aliexpress.es (AliExpress Open Platform API) | app key + secret, seller authorization (OAuth) | [docs/aliexpress_push.md](docs/aliexpress_push.md) |
 | `temu_push.py` | Temu as a local seller in Europe, e.g. temu.com/es (Temu Partner API) | app key + secret + access token from Seller Center | [docs/temu_push.md](docs/temu_push.md) |
 | `tiktok_push.py` | TikTok Shop Spain and other EU shops (TikTok Shop Partner API) | app key + secret, seller authorization (OAuth) | [docs/tiktok_push.md](docs/tiktok_push.md) |
@@ -355,6 +356,27 @@ python cdiscount_push.py status           # active and online on Cdiscount?
 
 ---
 
+## Allegro quick start
+
+Books are listed on Allegro's product catalog by EAN/ISBN, new or used, with
+prices converted to PLN (`EUR_TO_PLN`, default 4.25). Register a "device" app at
+apps.developer.allegro.pl, authorize it once with `auth`, and set up a shipping
+rates set, return policy, implied warranty and responsible producer (GPSR) in
+your Allegro account.
+
+```powershell
+$env:ALLEGRO_CLIENT_ID = "..."
+$env:ALLEGRO_CLIENT_SECRET = "..."
+
+python allegro_push.py auth            # open the link, confirm the code (once)
+python allegro_push.py check           # account settings found?
+python allegro_push.py push --dry-run  # writes allegro_offers.json (prices in PLN)
+python allegro_push.py push --limit 1  # one real offer
+python allegro_push.py status
+```
+
+---
+
 ## AliExpress quick start
 
 AliExpress has no catalog to attach offers to, so every book becomes its own
@@ -447,7 +469,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All seventeen scripts have only been tested against local mocks of the APIs. Before you
+All eighteen scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -505,6 +527,10 @@ push your whole catalogue, try one item at a time:
   1. `check` shows your shop as `Activated`.
   2. `push --dry-run` shows which books are in Cdiscount's catalog.
   3. `push --limit 1` waits for the package and shows the offer as integrated, and `status` shows it `ACTIVE  ONLINE`.
+- **Allegro:**
+  1. `auth` once, then `check` finds the shipping rates, return policy, implied warranty and responsible producer.
+  2. `lookup <isbn>` and `push --dry-run` show which books Allegro's catalog knows, with prices in PLN.
+  3. `push --limit 1` followed by `status` shows the offer as `ACTIVE`.
 - **AliExpress:**
   1. `check` shows your shop, a shipping template and a GPSR responsible person.
   2. `ean <isbn>` shows whether AliExpress knows your books, and `push --dry-run` builds them.
@@ -535,6 +561,7 @@ python tests\test_empik.py
 python tests\test_kaufland.py
 python tests\test_bol.py
 python tests\test_cdiscount.py
+python tests\test_allegro.py
 python tests\test_aliexpress.py
 python tests\test_temu.py
 python tests\test_tiktok.py

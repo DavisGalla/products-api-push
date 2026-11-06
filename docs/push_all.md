@@ -51,6 +51,7 @@ push_all.py ── push_all_config.json (what to run)
         ├─► kaufland_push.py push …      │
         ├─► bol_push.py push …           │
         ├─► cdiscount_push.py push …     │
+        ├─► allegro_push.py push …       │
         ├─► aliexpress_push.py push …    │
         ├─► temu_push.py push …          │
         └─► tiktok_push.py push …        ─┘
@@ -95,6 +96,7 @@ One pusher failing doesn't stop the others.
     "kaufland":      {"enabled": false, "args": ["--storefront", "es"]},
     "bol":           {"enabled": false, "args": ["--countries", "NL,BE"]},
     "cdiscount":     {"enabled": false, "args": []},
+    "allegro":       {"enabled": false, "args": []},
     "aliexpress":    {"enabled": false, "args": []},
     "temu":          {"enabled": false, "args": []},
     "tiktok":        {"enabled": false, "args": []}
@@ -198,7 +200,7 @@ to *Password Manager* and *Admin Console*.
    | `GMAIL_ADDRESS` | sender Gmail address |
    | `GMAIL_APP_PASSWORD` | Gmail App Password (see [Setup](#setup)) |
    | `REPORT_TO` | optional, comma-separated recipients |
-   | `VINTED_PRO_TOKEN`, `EBAY_…`, `AMAZON_…`, `CASADELLIBRO_…`, `FNAC_…`, `ABEBOOKS_…`, `ELCORTEINGLES_…`, `CARREFOUR_…`, `WORTEN_…`, `IBS_…`, `EMPIK_…`, `KAUFLAND_…`, `BOL_…`, `OCTOPIA_…`, `ALIEXPRESS_…`, `TEMU_…`, `TIKTOK_…` | marketplace credentials, added when you have them |
+   | `VINTED_PRO_TOKEN`, `EBAY_…`, `AMAZON_…`, `CASADELLIBRO_…`, `FNAC_…`, `ABEBOOKS_…`, `ELCORTEINGLES_…`, `CARREFOUR_…`, `WORTEN_…`, `IBS_…`, `EMPIK_…`, `KAUFLAND_…`, `BOL_…`, `OCTOPIA_…`, `ALLEGRO_…`, `ALIEXPRESS_…`, `TEMU_…`, `TIKTOK_…` | marketplace credentials, added when you have them |
 
 4. **Machine account.** Choose **Machine accounts → New** and name it, for
    example, `product-pushers-server`.
