@@ -15,6 +15,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `worten_push.py` | Worten marketplace, Portugal + Spain (Mirakl seller API) | API key | [docs/worten_push.md](docs/worten_push.md) |
 | `ibs_push.py` | IBS.it marketplace, Italy (Mirakl seller API) | API key | [docs/ibs_push.md](docs/ibs_push.md) |
 | `kaufland_push.py` | Kaufland.es and other Kaufland storefronts (Kaufland Seller API v2) | client key + secret key | [docs/kaufland_push.md](docs/kaufland_push.md) |
+| `bol_push.py` | bol.com, Netherlands + Belgium (Retailer API, Offers v11) | client ID + secret | [docs/bol_push.md](docs/bol_push.md) |
 | `aliexpress_push.py` | AliExpress as a local seller, e.g. aliexpress.es (AliExpress Open Platform API) | app key + secret, seller authorization (OAuth) | [docs/aliexpress_push.md](docs/aliexpress_push.md) |
 | `temu_push.py` | Temu as a local seller in Europe, e.g. temu.com/es (Temu Partner API) | app key + secret + access token from Seller Center | [docs/temu_push.md](docs/temu_push.md) |
 | `tiktok_push.py` | TikTok Shop Spain and other EU shops (TikTok Shop Partner API) | app key + secret, seller authorization (OAuth) | [docs/tiktok_push.md](docs/tiktok_push.md) |
@@ -291,6 +292,26 @@ python kaufland_push.py status           # LIVE? if not, Kaufland's reasons
 
 ---
 
+## bol.com quick start
+
+Books are matched to bol's catalog by EAN/ISBN, and an offer is created for the
+Netherlands and Belgium. New and used books can be sold. Create the Client ID
+and Client Secret in the Seller Dashboard under *Instellingen → API
+Instellingen*, and set up your delivery promise and an economic operator (GPSR)
+there too.
+
+```powershell
+$env:BOL_CLIENT_ID = "..."
+$env:BOL_CLIENT_SECRET = "..."
+
+python bol_push.py check            # keys work, economic operator?
+python bol_push.py push --dry-run   # writes bol_offers.json, sends nothing
+python bol_push.py push --limit 1   # one real offer
+python bol_push.py status           # for sale in NL/BE? if not, bol's reasons
+```
+
+---
+
 ## AliExpress quick start
 
 AliExpress has no catalog to attach offers to, so every book becomes its own
@@ -383,7 +404,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All fourteen scripts have only been tested against local mocks of the APIs. Before you
+All fifteen scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -429,6 +450,10 @@ push your whole catalogue, try one item at a time:
   1. `check` accepts the keys and lists `es`.
   2. `push --dry-run` shows which books are in Kaufland's catalog.
   3. `push --limit 1` followed by `status` shows the unit as `LIVE`, or Kaufland's reason it isn't.
+- **bol.com:**
+  1. `check` accepts the keys and lists an economic operator.
+  2. `push --dry-run` shows which books are in bol's catalog.
+  3. `push --limit 1` followed by `status` shows the offer as `FOR SALE in NL, BE`, or bol's reason it isn't.
 - **AliExpress:**
   1. `check` shows your shop, a shipping template and a GPSR responsible person.
   2. `ean <isbn>` shows whether AliExpress knows your books, and `push --dry-run` builds them.
@@ -456,6 +481,7 @@ python tests\test_carrefour.py
 python tests\test_worten.py
 python tests\test_ibs.py
 python tests\test_kaufland.py
+python tests\test_bol.py
 python tests\test_aliexpress.py
 python tests\test_temu.py
 python tests\test_tiktok.py
