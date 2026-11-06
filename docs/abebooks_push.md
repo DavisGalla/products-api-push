@@ -9,6 +9,14 @@ Everything below describes how the script behaves today.
 IberLibro.com is AbeBooks' Spanish site. Books in your AbeBooks inventory are
 listed there, and on the other AbeBooks sites, from the same inventory.
 
+**ZVAB** (zvab.com, the German-language antiquarian book site) is also part of
+AbeBooks, and it has no separate account or API. Your AbeBooks inventory is
+listed there too once AbeBooks invites you. ZVAB only publishes selected
+offers from selected sellers: professional sellers, with stock relevant to
+German-speaking customers and careful, complete item descriptions
+([zvab.com/buecher-verkaufen.shtml](https://www.zvab.com/buecher-verkaufen.shtml)).
+This script needs no extra setting for it.
+
 - [How it works](#how-it-works)
 - [Setup](#setup)
 - [Commands](#commands)

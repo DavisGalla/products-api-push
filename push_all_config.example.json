@@ -16,6 +16,7 @@
     "carrefour":     {"enabled": false, "args": []},
     "worten":        {"enabled": false, "args": []},
     "ibs":           {"enabled": false, "args": []},
+    "empik":         {"enabled": false, "args": []},
     "kaufland":      {"enabled": false, "args": ["--storefront", "es"]},
     "bol":           {"enabled": false, "args": ["--countries", "NL,BE"]},
     "cdiscount":     {"enabled": false, "args": []},

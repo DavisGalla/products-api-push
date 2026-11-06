@@ -168,7 +168,7 @@ check exactly what was sent.
 - **Offers only.** The script can't create new products in IBS's catalog.
   IBS is a bookshop, so its catalog of Italian books is large, but
   foreign-language books may be missing. `push --dry-run` shows which of
-  yours it has. `push --dry-run` shows which of your books it has.
+  yours it has.
 - **Fixed book prices.** New books in Italy have a price fixed by law
   (Legge 128/2011, the "Legge Levi", as amended by Legge 15/2020: at most 5%
   discount on the cover price).

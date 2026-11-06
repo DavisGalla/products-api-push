@@ -9,11 +9,12 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `amazon_push.py` | Amazon EU: ES, DE, FR, IT, NL, BE, PL, SE, IE (+ UK) (Selling Partner API) | LWA refresh token | [docs/amazon_push.md](docs/amazon_push.md) |
 | `casadellibro_push.py` | Casa del Libro marketplace (Mirakl seller API) | API key | [docs/casadellibro_push.md](docs/casadellibro_push.md) |
 | `fnac_push.py` | Fnac marketplace: Fnac.es, Fnac.com... (Fnac Marketplace API v2.6) | partner ID + shop ID + key | [docs/fnac_push.md](docs/fnac_push.md) |
-| `abebooks_push.py` | AbeBooks / IberLibro (AbeBooks Inventory Update API) | username + API key | [docs/abebooks_push.md](docs/abebooks_push.md) |
+| `abebooks_push.py` | AbeBooks / IberLibro, and ZVAB once AbeBooks invites you (AbeBooks Inventory Update API) | username + API key | [docs/abebooks_push.md](docs/abebooks_push.md) |
 | `elcorteingles_push.py` | El Corte Inglés marketplace (Mirakl seller API) | API key | [docs/elcorteingles_push.md](docs/elcorteingles_push.md) |
 | `carrefour_push.py` | Carrefour marketplace (Mirakl seller API) | API key | [docs/carrefour_push.md](docs/carrefour_push.md) |
 | `worten_push.py` | Worten marketplace, Portugal + Spain (Mirakl seller API) | API key | [docs/worten_push.md](docs/worten_push.md) |
 | `ibs_push.py` | IBS.it marketplace, Italy (Mirakl seller API) | API key | [docs/ibs_push.md](docs/ibs_push.md) |
+| `empik_push.py` | Empik Marketplace, Poland (Mirakl seller API; prices converted to PLN) | API key | [docs/empik_push.md](docs/empik_push.md) |
 | `kaufland_push.py` | Kaufland.es and other Kaufland storefronts (Kaufland Seller API v2) | client key + secret key | [docs/kaufland_push.md](docs/kaufland_push.md) |
 | `bol_push.py` | bol.com, Netherlands + Belgium (Retailer API, Offers v11) | client ID + secret | [docs/bol_push.md](docs/bol_push.md) |
 | `cdiscount_push.py` | Cdiscount, France (Octopia Seller API) | client ID + secret + seller ID | [docs/cdiscount_push.md](docs/cdiscount_push.md) |
@@ -274,6 +275,26 @@ python ibs_push.py status
 
 ---
 
+## Empik quick start
+
+Empik (Poland) also runs on Mirakl, so this works like the IBS.it pusher: books
+are matched to Empik's catalog by EAN/ISBN, and offers are uploaded as one
+import. Empik sells in zloty, so EUR prices are converted with `EUR_TO_PLN`
+(default 4.25) or `--eur-rate`. Take the API key (*Profil → Klucz API*) and
+your shop's API URL from the seller panel.
+
+```powershell
+$env:EMPIK_API_URL = "https://<instance>.mirakl.net"
+$env:EMPIK_API_KEY = "..."
+
+python empik_push.py check            # key and URL work?
+python empik_push.py push --dry-run   # writes empik_offers.csv (prices in PLN), uploads nothing
+python empik_push.py push --limit 1   # one real offer
+python empik_push.py status
+```
+
+---
+
 ## Kaufland.es quick start
 
 Books are matched to Kaufland's catalog by EAN/ISBN, and an offer ("unit") is
@@ -426,7 +447,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All sixteen scripts have only been tested against local mocks of the APIs. Before you
+All seventeen scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -468,6 +489,10 @@ push your whole catalogue, try one item at a time:
   1. `check` shows your shop, and `states` confirms `11` is "New".
   2. `push --dry-run` shows which books are in IBS's catalog.
   3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
+- **Empik:**
+  1. `check` shows your shop, and `states` confirms `11` is "New".
+  2. `push --dry-run` shows which books are in Empik's catalog, with prices in PLN.
+  3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
 - **Kaufland:**
   1. `check` accepts the keys and lists `es`.
   2. `push --dry-run` shows which books are in Kaufland's catalog.
@@ -506,6 +531,7 @@ python tests\test_elcorteingles.py
 python tests\test_carrefour.py
 python tests\test_worten.py
 python tests\test_ibs.py
+python tests\test_empik.py
 python tests\test_kaufland.py
 python tests\test_bol.py
 python tests\test_cdiscount.py

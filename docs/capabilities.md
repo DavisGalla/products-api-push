@@ -24,20 +24,20 @@ Every seller activity, per marketplace: what our scripts already do automaticall
 | **Money** | | | | | | | | | | | | |
 | Payouts, fees, sales reports | ✋ in app | 🟢 Finances API | 🟢 Finances API + reports | 🟢 accounting API | ✋ seller portal | ✋ seller account | 🟢 sales reports API | 🟢 invoices API | 🟢 financial API | 🟢 settlement API | 🟡 order amounts only | 🟢 finance API |
 
-¹ Mirakl shops = Casa del Libro, El Corte Inglés, Carrefour, Worten (Portugal + Spain) and IBS.it (Italy). They run on the same platform (Mirakl), so they work the same way.  
+¹ Mirakl shops = Casa del Libro, El Corte Inglés, Carrefour, Worten (Portugal + Spain), IBS.it (Italy) and Empik (Poland). They run on the same platform (Mirakl), so they work the same way.  
 * AbeBooks' Order Update API is separate from the listing API and has to be requested from AbeBooks.  
 No marketplace has been tested with real seller accounts yet. The table is based on each marketplace's official API documentation (Vinted Pro, eBay, Amazon SP-API, Mirakl, Fnac, Kaufland, AliExpress Open Platform, Temu Partner API, TikTok Shop Partner API, bol.com Retailer API, Octopia Seller API).
 
 ## Summary
 
-- **Listing books is automatic today** on all 16 marketplaces (add; price/stock updates on the Mirakl shops, Fnac, AbeBooks, Kaufland, bol.com, Cdiscount, AliExpress, Temu and TikTok Shop).
+- **Listing books is automatic today** on all 17 marketplaces (add; price/stock updates on the Mirakl shops, Fnac, AbeBooks, Kaufland, bol.com, Cdiscount, AliExpress, Temu and TikTok Shop).
 - **Sales can be managed automatically** almost everywhere: seeing orders, accepting them, tracking numbers and cancellations all have APIs, but they aren't built yet.
 - **Vinted is the most manual:** its API covers listings and orders only. Messages, offers, returns and payouts are app-only.
 - **Leads** (sending offers to interested buyers) exist only on eBay. On the other marketplaces, buyer interest arrives as messages.
 
 ## Suggested next steps to manage sales
 
-- **Stop double sales.** The same book is listed on up to 16 marketplaces, but there is usually 1 copy. When it sells on one, set its stock to 0 everywhere else, automatically. **This is the most important one**: without it, the same copy can be sold twice.
+- **Stop double sales.** The same book is listed on up to 17 marketplaces, but there is usually 1 copy. When it sells on one, set its stock to 0 everywhere else, automatically. **This is the most important one**: without it, the same copy can be sold twice.
 - **One list of all sales.** Collect new orders from every marketplace into one place, and add them to the daily email (or more often): what sold, where, price, buyer address.
 - **Auto-accept orders.** Mirakl shops, Fnac, AbeBooks and Cdiscount require accepting each order. If it isn't accepted in time, the order is cancelled and the shop's rating drops. This can be automatic when the book is in stock.
 - **Shipping.** Send the tracking numbers back to each marketplace automatically. Packing and taking parcels to the carrier stays manual.
