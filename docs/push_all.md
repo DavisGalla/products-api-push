@@ -48,6 +48,7 @@ push_all.py ── push_all_config.json (what to run)
         ├─► worten_push.py push …        │
         ├─► ibs_push.py push …           │
         ├─► empik_push.py push …         │
+        ├─► leclerc_push.py push …       │
         ├─► kaufland_push.py push …      │
         ├─► bol_push.py push …           │
         ├─► cdiscount_push.py push …     │
@@ -93,6 +94,7 @@ One pusher failing doesn't stop the others.
     "worten":        {"enabled": false, "args": []},
     "ibs":           {"enabled": false, "args": []},
     "empik":         {"enabled": false, "args": []},
+    "leclerc":       {"enabled": false, "args": []},
     "kaufland":      {"enabled": false, "args": ["--storefront", "es"]},
     "bol":           {"enabled": false, "args": ["--countries", "NL,BE"]},
     "cdiscount":     {"enabled": false, "args": []},
@@ -200,7 +202,7 @@ to *Password Manager* and *Admin Console*.
    | `GMAIL_ADDRESS` | sender Gmail address |
    | `GMAIL_APP_PASSWORD` | Gmail App Password (see [Setup](#setup)) |
    | `REPORT_TO` | optional, comma-separated recipients |
-   | `VINTED_PRO_TOKEN`, `EBAY_…`, `AMAZON_…`, `CASADELLIBRO_…`, `FNAC_…`, `ABEBOOKS_…`, `ELCORTEINGLES_…`, `CARREFOUR_…`, `WORTEN_…`, `IBS_…`, `EMPIK_…`, `KAUFLAND_…`, `BOL_…`, `OCTOPIA_…`, `ALLEGRO_…`, `ALIEXPRESS_…`, `TEMU_…`, `TIKTOK_…` | marketplace credentials, added when you have them |
+   | `VINTED_PRO_TOKEN`, `EBAY_…`, `AMAZON_…`, `CASADELLIBRO_…`, `FNAC_…`, `ABEBOOKS_…`, `ELCORTEINGLES_…`, `CARREFOUR_…`, `WORTEN_…`, `IBS_…`, `EMPIK_…`, `LECLERC_…`, `KAUFLAND_…`, `BOL_…`, `OCTOPIA_…`, `ALLEGRO_…`, `ALIEXPRESS_…`, `TEMU_…`, `TIKTOK_…` | marketplace credentials, added when you have them |
 
 4. **Machine account.** Choose **Machine accounts → New** and name it, for
    example, `product-pushers-server`.
@@ -312,7 +314,7 @@ bws run -- python push_all.py --no-email              # real run, report printed
 
 `--dry-run` runs each pusher in its safe mode: `--validate-only` for Vinted
 and Amazon, `--dry-run` for the rest. Casa del Libro, El Corte Inglés, Carrefour, Worten,
-IBS.it and Empik still need credentials in dry-run mode, because they check the catalog. AliExpress
+IBS.it, Empik and E.Leclerc still need credentials in dry-run mode, because they check the catalog. AliExpress
 builds its preview without credentials, but then skips the EAN lookup. Temu and TikTok Shop
 build their previews without credentials too, with placeholders for the category data.
 

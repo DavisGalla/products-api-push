@@ -15,6 +15,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `worten_push.py` | Worten marketplace, Portugal + Spain (Mirakl seller API) | API key | [docs/worten_push.md](docs/worten_push.md) |
 | `ibs_push.py` | IBS.it marketplace, Italy (Mirakl seller API) | API key | [docs/ibs_push.md](docs/ibs_push.md) |
 | `empik_push.py` | Empik Marketplace, Poland (Mirakl seller API; prices converted to PLN) | API key | [docs/empik_push.md](docs/empik_push.md) |
+| `leclerc_push.py` | E.Leclerc marketplace, France (Mirakl seller API) | API key | [docs/leclerc_push.md](docs/leclerc_push.md) |
 | `kaufland_push.py` | Kaufland.es and other Kaufland storefronts (Kaufland Seller API v2) | client key + secret key | [docs/kaufland_push.md](docs/kaufland_push.md) |
 | `bol_push.py` | bol.com, Netherlands + Belgium (Retailer API, Offers v11) | client ID + secret | [docs/bol_push.md](docs/bol_push.md) |
 | `cdiscount_push.py` | Cdiscount, France (Octopia Seller API) | client ID + secret + seller ID | [docs/cdiscount_push.md](docs/cdiscount_push.md) |
@@ -296,6 +297,26 @@ python empik_push.py status
 
 ---
 
+## E.Leclerc quick start
+
+E.Leclerc (France) also runs on Mirakl, so this works like the Carrefour and
+IBS.it pushers: books are matched to E.Leclerc's catalog by EAN/ISBN, and offers
+are uploaded as one import. E.Leclerc approves professional sellers from the
+euro zone itself. Take the API key and your shop's API URL from the seller back
+office.
+
+```powershell
+$env:LECLERC_API_URL = "https://<instance>.mirakl.net"
+$env:LECLERC_API_KEY = "..."
+
+python leclerc_push.py check            # key and URL work?
+python leclerc_push.py push --dry-run   # writes leclerc_offers.csv, uploads nothing
+python leclerc_push.py push --limit 1   # one real offer
+python leclerc_push.py status
+```
+
+---
+
 ## Kaufland.es quick start
 
 Books are matched to Kaufland's catalog by EAN/ISBN, and an offer ("unit") is
@@ -469,7 +490,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All eighteen scripts have only been tested against local mocks of the APIs. Before you
+All nineteen scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -515,6 +536,10 @@ push your whole catalogue, try one item at a time:
   1. `check` shows your shop, and `states` confirms `11` is "New".
   2. `push --dry-run` shows which books are in Empik's catalog, with prices in PLN.
   3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
+- **E.Leclerc:**
+  1. `check` shows your shop, and `states` confirms `11` is "New".
+  2. `push --dry-run` shows which books are in E.Leclerc's catalog.
+  3. `push --limit 1` followed by `status` shows the offer as `LIVE`.
 - **Kaufland:**
   1. `check` accepts the keys and lists `es`.
   2. `push --dry-run` shows which books are in Kaufland's catalog.
@@ -558,6 +583,7 @@ python tests\test_carrefour.py
 python tests\test_worten.py
 python tests\test_ibs.py
 python tests\test_empik.py
+python tests\test_leclerc.py
 python tests\test_kaufland.py
 python tests\test_bol.py
 python tests\test_cdiscount.py
