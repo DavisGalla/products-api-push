@@ -18,6 +18,7 @@
     "ibs":           {"enabled": false, "args": []},
     "kaufland":      {"enabled": false, "args": ["--storefront", "es"]},
     "bol":           {"enabled": false, "args": ["--countries", "NL,BE"]},
+    "cdiscount":     {"enabled": false, "args": []},
     "aliexpress":    {"enabled": false, "args": []},
     "temu":          {"enabled": false, "args": []},
     "tiktok":        {"enabled": false, "args": []}
