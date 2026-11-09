@@ -2,8 +2,8 @@
 
 This script pushes products to eBay EU marketplaces through the official
 **eBay Sell Inventory API**. For each product it creates an inventory item,
-then an offer, then publishes the offer. Everything below describes how it
-behaves today.
+then an offer, then publishes the offer. One run can list on one eBay site or
+on several (`--markets`). Everything below describes how it behaves today.
 
 - [Setup](#setup)
 - [Usage](#usage)
@@ -31,11 +31,14 @@ pip install -r requirements.txt
 2. In the developer portal, open **User Tokens** and sign in as your seller
    account. Get a **refresh token** with the scopes `sell.inventory` and
    `sell.account`.
-3. In **eBay Seller Hub**, opt in to **Business Policies**, then create:
+3. In **eBay Seller Hub**, opt in to **Business Policies**, then create
+   **for each eBay site you sell on**:
    - a shipping (fulfillment) policy
    - a payment policy
    - a return policy
-   - at least one **inventory location**
+
+   Also create at least one **inventory location**. The location is shared
+   by all sites.
 
 **Environment variables:**
 
@@ -45,8 +48,9 @@ $env:EBAY_CLIENT_SECRET = "..."
 $env:EBAY_REFRESH_TOKEN = "v^1.1#..."
 ```
 
-These variables are optional. By default the script uses the first policy of
-each kind and the first location it finds.
+These variables are optional. By default the script uses, for each site, the
+first policy of each kind on that site, and the first location it finds. The
+policy overrides apply to every site, so only use them with a single site.
 
 | Variable | Overrides |
 |---|---|
@@ -68,7 +72,9 @@ python ebay_push.py books.json --dry-run                     # show payloads, no
 python ebay_push.py books.json --sandbox --limit 1           # eBay test site (needs sandbox keys)
 python ebay_push.py books.json --no-publish --limit 1        # real account, listing NOT live
 python ebay_push.py books.json --limit 1                     # one real live listing
-python ebay_push.py books.json                               # everything
+python ebay_push.py books.json                               # everything (ebay.es)
+python ebay_push.py books.json --markets EBAY_ES,EBAY_DE      # several sites in one run
+python ebay_push.py books.json --markets all                  # all 11 sites
 ```
 
 When the script is about to publish live listings, it asks you to type `yes`.
@@ -79,11 +85,12 @@ Use `--yes` to skip that question.
 | Option | Default | Meaning |
 |---|---|---|
 | `json_file` | required | Products file. |
-| `--market` | `EBAY_ES` | One of `EBAY_ES`, `EBAY_DE`, `EBAY_FR`, `EBAY_IT`, `EBAY_NL`, `EBAY_AT`, `EBAY_BE`, `EBAY_IE`, `EBAY_GB`, `EBAY_CH`, `EBAY_PL`. Sets the language, currency and category tree. |
+| `--market` | `EBAY_ES` | One site: `EBAY_ES`, `EBAY_DE`, `EBAY_FR`, `EBAY_IT`, `EBAY_NL`, `EBAY_AT`, `EBAY_BE`, `EBAY_IE`, `EBAY_GB`, `EBAY_CH` or `EBAY_PL`. Sets the language, currency and category tree. |
+| `--markets` | – | Several sites in one run, comma separated (`EBAY_ES,EBAY_DE,EBAY_FR`), or `eur` (the 8 euro sites) or `all` (all 11). Each site is listed separately; a site without business policies is skipped with a message. |
 | `--category-id` | suggested | eBay leaf category for every item. If you leave it out, eBay's taxonomy API suggests one from each title. |
 | `--quantity` | `1` | Stock quantity per listing. |
-| `--language` | from market | Value of the book's *Language* aspect, for example `Español`. |
-| `--limit N` | `0` (all) | Processes at most N items. |
+| `--language` | `BOOK_LANGUAGE` | Value of the book's *Language* aspect. By default the books' language (`BOOK_LANGUAGE = "es"`) in each site's own words: `Español`, `Spanisch`, `Espagnol`, `Spagnolo`, `Spaans`, `Hiszpański`, `Spanish`. |
+| `--limit N` | `0` (all) | Processes at most N new items per site. |
 | `--no-publish` | off | Creates the inventory item and offer but doesn't publish them. |
 | `--dry-run` | off | Prints the payloads. Without credentials, it doesn't call eBay at all. |
 | `--sandbox` | off | Uses `api.sandbox.ebay.com`. This needs sandbox keys. |
@@ -99,7 +106,7 @@ fields the script reads:
 | `id` or `sku` | Your SKU (required, at most 50 characters). It's also used to detect duplicates. |
 | `title` | Listing title (cut to 80 characters). |
 | `description` or `description_html` | `description` is plain text, and line breaks become `<br>`. `description_html` is used unchanged. |
-| `price_eur` or `price` | Price, in the market's currency. |
+| `price_eur` or `price` | Price in EUR. The UK, Swiss and Polish sites get it converted to GBP, CHF and PLN with `EUR_RATE` at the top of the script (update the rates regularly). |
 | `images`, `image_urls`, `photo_urls` or `image` | **Public** image URLs (up to 24 are used). |
 | `brand` | Sent as the *Publisher* aspect. |
 | `isbn` | Sent as the ISBN aspect and product identifier, with hyphens removed. |
@@ -199,6 +206,8 @@ These are created in the folder you run the script from.
 ## Limitations
 
 - **Images must be public URLs.** Local files aren't uploaded.
+- **Several sites, one copy.** With `--markets`, the same book is listed separately on each site. If you have one copy, it can sell on two sites at once until stock is synced; a book listed on one site can also be shown to buyers abroad if your shipping policy allows it.
+- **Exchange rates** for GBP, CHF and PLN are fixed in `EUR_RATE`, not fetched live.
 - **Creating and updating listings only.** Ending listings, syncing stock and handling orders aren't implemented.
 - **The category is suggested from the title** unless you pass `--category-id`, so check what it suggests.
 - **The script hasn't been run against the real eBay API yet.** Follow the first-run order under [Usage](#usage).
@@ -223,6 +232,10 @@ checks the following:
 - category, policies and location are set
 - conditions are mapped
 - nothing is published twice on a re-run
+- `--markets`: several sites in one run, each with its own policies, the
+  right currency (GBP conversion checked) and the language in the site's
+  words; a site without policies is skipped; the state keeps sites apart;
+  `eur` expands to the 8 euro sites
 
 Your real `ebay_posted.json` is never touched, because the test runs in a
 temporary folder.

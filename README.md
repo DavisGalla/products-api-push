@@ -109,8 +109,13 @@ $env:EBAY_REFRESH_TOKEN = "v^1.1#..."
 python ebay_push.py books.json --dry-run
 python ebay_push.py books.json --no-publish --limit 1   # created, not live
 python ebay_push.py books.json --limit 1                # one live listing
-python ebay_push.py books.json --market EBAY_ES         # everything
+python ebay_push.py books.json --market EBAY_ES         # everything on ebay.es
+python ebay_push.py books.json --markets all            # all 11 European eBay sites
 ```
+
+Each eBay site needs its own shipping, payment and return policy in Seller
+Hub; a site without them is skipped with a message. Prices are converted for
+the UK, Switzerland and Poland.
 
 ---
 

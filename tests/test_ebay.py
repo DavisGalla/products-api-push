@@ -31,11 +31,18 @@ class S:  # recorded mock state
     ebay_offers = {}
     ebay_published = {}
     ebay_publish_calls = 0
+    by_market = {}
+    policy_markets = None   # None = every site has business policies
 
     @classmethod
     def reset(cls):
         cls.ebay_inventory, cls.ebay_offers, cls.ebay_published = {}, {}, {}
         cls.ebay_publish_calls = 0
+        cls.by_market = {}
+        cls.policy_markets = None
+
+
+CURRENCY = {"EBAY_GB": "GBP", "EBAY_CH": "CHF", "EBAY_PL": "PLN"}   # all other EU sites: EUR
 
 
 # ---------------------------------------------------------------- mock server
@@ -95,7 +102,10 @@ class Handler(BaseHTTPRequestHandler):
                    "return_policy": "returnPolicies"}[kind]
             pid = {"fulfillment_policy": "fulfillmentPolicyId", "payment_policy": "paymentPolicyId",
                    "return_policy": "returnPolicyId"}[kind]
-            return self.send(200, {key: [{pid: kind[0].upper() + "1"}]})
+            market = q.get("marketplace_id", [""])[0]
+            if S.policy_markets is not None and market not in S.policy_markets:
+                return self.send(200, {key: []})
+            return self.send(200, {key: [{pid: kind[0].upper() + "1-" + market}]})
         if method == "GET" and p == "/sell/inventory/v1/location":
             return self.send(200, {"locations": [{"merchantLocationKey": "WH1"}]})
         m = re.fullmatch(r"/sell/inventory/v1/inventory_item/(.+)", p)
@@ -117,12 +127,16 @@ class Handler(BaseHTTPRequestHandler):
             S.ebay_inventory[m.group(1)] = it
             return self.send(204)
         if method == "GET" and p == "/sell/inventory/v1/offer":
-            offers = [o for o in S.ebay_offers.values() if o["sku"] == q.get("sku", [None])[0]]
+            offers = [o for o in S.ebay_offers.values() if o["sku"] == q.get("sku", [None])[0]
+                      and o["marketplaceId"] == q.get("marketplace_id", [None])[0]]
             return self.send(200, {"offers": offers}) if offers else self.send(404, {"errors": [{"errorId": 25713}]})
         if method == "POST" and p == "/sell/inventory/v1/offer":
             o = json.loads(body)
             if o.get("sku") not in S.ebay_inventory:
                 return self.send(400, {"errors": [{"message": "inventory item not found"}]})
+            want = CURRENCY.get(o.get("marketplaceId"), "EUR")
+            if o["pricingSummary"]["price"]["currency"] != want or o["marketplaceId"] != self.headers.get("X-EBAY-C-MARKETPLACE-ID"):
+                return self.send(400, {"errors": [{"message": f"currency must be {want} on {o.get('marketplaceId')}"}]})
             oid = f"OFFER-{len(S.ebay_offers) + 1}"
             S.ebay_offers[oid] = dict(o, offerId=oid)
             return self.send(201, {"offerId": oid})
@@ -140,6 +154,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(400, {"errors": [{"message": "offer incomplete"}]})
             lid = str(110000000000 + len(S.ebay_published))
             S.ebay_published[o["sku"]] = {"listingId": lid, "offer": o, "item": S.ebay_inventory[o["sku"]]}
+            S.by_market[(o["marketplaceId"], o["sku"])] = {"listingId": lid, "offer": o,
+                                                           "item": json.loads(json.dumps(S.ebay_inventory[o["sku"]]))}
             return self.send(200, {"listingId": lid})
         self.send(404, {"errors": [{"message": f"unknown ebay endpoint {method} {p}"}]})
 
@@ -217,6 +233,46 @@ def test_ebay():
         calls = S.ebay_publish_calls
         rc, out = run(EBAY_WRAPPER, [pf, "--market", "EBAY_ES", "--yes"], tmp, EBAY_ENV)
         check("re-run does not publish again", S.ebay_publish_calls == calls, out[-300:])
+
+        # ---- several sites in one run
+        S.policy_markets = {"EBAY_ES", "EBAY_DE", "EBAY_GB"}
+        calls = S.ebay_publish_calls
+        rc, out = run(EBAY_WRAPPER, [pf, "--markets", "EBAY_ES,EBAY_DE,EBAY_GB,EBAY_PL", "--yes"], tmp, EBAY_ENV)
+        de = {s for (m, s) in S.by_market if m == "EBAY_DE"}
+        gb = {s for (m, s) in S.by_market if m == "EBAY_GB"}
+        check("--markets: listed on ebay.de and ebay.co.uk, ebay.es not again",
+              de == PUSHABLE and gb == PUSHABLE and S.ebay_publish_calls == calls + 2 * len(PUSHABLE), out[-400:])
+        check("site without business policies skipped with a message",
+              "! EBAY_PL: missing shipping/return business policy" in out
+              and not any(m == "EBAY_PL" for m, _ in S.by_market), out[-400:])
+        if "T-USED" in gb:
+            check("ebay.co.uk price converted to GBP (12.50 EUR -> 10.63 GBP)",
+                  S.by_market[("EBAY_GB", "T-USED")]["offer"]["pricingSummary"]["price"] == {"value": "10.63", "currency": "GBP"})
+            check("each site gets its own policies",
+                  S.by_market[("EBAY_DE", "T-USED")]["offer"]["listingPolicies"]["returnPolicyId"] == "R1-EBAY_DE")
+            check("book language in the site's words (Spanisch / Spanish)",
+                  S.by_market[("EBAY_DE", "T-USED")]["item"]["product"]["aspects"]["Language"] == ["Spanisch"]
+                  and S.by_market[("EBAY_GB", "T-USED")]["item"]["product"]["aspects"]["Language"] == ["Spanish"])
+        state = json.loads((Path(tmp) / "ebay_posted.json").read_text())
+        check("state keeps each site apart", {k.split(":")[0] for k in state} == {"EBAY_ES", "EBAY_DE", "EBAY_GB"})
+
+        calls = S.ebay_publish_calls
+        rc, out = run(EBAY_WRAPPER, [pf, "--markets", "EBAY_ES,EBAY_DE,EBAY_GB", "--yes"], tmp, EBAY_ENV)
+        check("re-run on several sites publishes nothing", S.ebay_publish_calls == calls, out[-300:])
+
+        S.policy_markets = set()
+        rc, out = run(EBAY_WRAPPER, [pf, "--markets", "EBAY_FR,EBAY_IT", "--yes"], tmp, EBAY_ENV)
+        check("no site ready: clear error", rc != 0 and "No eBay site is ready" in out, out[-300:])
+
+        rc, out = run(EBAY_WRAPPER, [pf, "--markets", "EBAY_XX", "--yes"], tmp, EBAY_ENV)
+        check("unknown site refused", rc != 0 and "Unknown eBay site" in out, out[-300:])
+
+    with tempfile.TemporaryDirectory() as tmp:
+        rc, out = run(EBAY_WRAPPER, [pf, "--markets", "eur", "--dry-run"], tmp, show=False)
+        sites = sorted({line.split()[1] for line in out.splitlines() if line.startswith("[") and " EBAY_" in line})
+        check("--markets eur: the 8 euro sites (dry run, no credentials)",
+              rc == 0 and sites == ["EBAY_AT", "EBAY_BE", "EBAY_DE", "EBAY_ES", "EBAY_FR", "EBAY_IE", "EBAY_IT", "EBAY_NL"],
+              f"{sites} {out[-300:]}")
 
 
 def main():

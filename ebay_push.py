@@ -21,12 +21,17 @@ USAGE
     python ebay_push.py C:/programming/scraper/books.json --dry-run
     python ebay_push.py C:/programming/scraper/books.json --market EBAY_ES --limit 2
     python ebay_push.py books.json --market EBAY_DE --category-id 261186 --quantity 3
+    python ebay_push.py books.json --markets EBAY_ES,EBAY_DE,EBAY_FR   # several sites in one run
+    python ebay_push.py books.json --markets eur                       # all euro sites (or: all)
     python ebay_push.py books.json --sandbox          # test against eBay's sandbox
 
 Markets: EBAY_ES, EBAY_DE, EBAY_FR, EBAY_IT, EBAY_NL, EBAY_AT, EBAY_BE,
          EBAY_IE, EBAY_GB, EBAY_CH, EBAY_PL
 
 Notes
+  * Each site needs its own shipping, payment and return business policy
+    (Seller Hub). A site without them is skipped with a message.
+  * Prices are EUR in the JSON; GBP / CHF / PLN sites get them converted (EUR_RATE).
   * Images must be publicly reachable URLs; the scraped "images" URLs are used as-is.
   * Books usually require an Author aspect. Add an "author" key to an item (and
     optionally "language") or eBay will reject the publish with a clear message.
@@ -39,6 +44,7 @@ import json
 import os
 import sys
 import time
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 import requests
@@ -59,6 +65,15 @@ MARKETS = {
     "EBAY_CH": ("193", "de-CH", "CHF"),
     "EBAY_PL": ("212", "pl-PL", "PLN"),
 }
+EURO_MARKETS = [m for m, v in MARKETS.items() if v[2] == "EUR"]
+# Source prices are EUR. Rates for the non-euro sites; update them regularly.
+EUR_RATE = {"EUR": "1", "GBP": "0.85", "CHF": "0.94", "PLN": "4.25"}
+# Language of the books, used for the "Language" aspect, in each site's own words.
+BOOK_LANGUAGE = "es"
+LANGUAGE_WORDS = {
+    "es": {"es": "Español", "de": "Spanisch", "fr": "Espagnol", "it": "Spagnolo", "nl": "Spaans",
+           "pl": "Hiszpański", "en": "Spanish"},
+}
 SCOPES = "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account"
 # Schema.org condition (scraped JSON) -> eBay inventory condition enum.
 # An eBay enum value (e.g. "USED_GOOD") in the JSON is passed through as-is.
@@ -68,7 +83,18 @@ CONDITION_MAP = {
     "RefurbishedCondition": "SELLER_REFURBISHED",
     "DamagedCondition": "FOR_PARTS_OR_NOT_WORKING",
 }
-LANG_NAMES = {"es": "Español", "de": "Deutsch", "fr": "Français", "it": "Italiano", "nl": "Nederlands", "pl": "Polski", "en": "English"}
+
+
+def book_language(site_lang):
+    """The books' language as the site writes it (e.g. 'Spanisch' on ebay.de)."""
+    words = LANGUAGE_WORDS.get(BOOK_LANGUAGE, {})
+    return words.get(site_lang[:2]) or words.get("en") or BOOK_LANGUAGE
+
+
+def market_price(price_eur, currency):
+    """EUR source price -> the site's currency, 2 decimals, half up."""
+    v = Decimal(str(price_eur)) * Decimal(EUR_RATE[currency])
+    return str(v.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 class Ebay:
@@ -192,7 +218,7 @@ def inventory_item_body(p, eb, default_lang):
 
 def push_one(eb, p, a, ctx):
     sku = p["sku"]
-    product = inventory_item_body(p, eb, a.language)
+    product = inventory_item_body(p, eb, a.language_now)
     item = {
         "availability": {"shipToLocationAvailability": {"quantity": a.quantity}},
         "condition": p["condition"],
@@ -212,7 +238,7 @@ def push_one(eb, p, a, ctx):
         "availableQuantity": a.quantity,
         "categoryId": str(cat_id),
         "listingDescription": p["description_html"],
-        "pricingSummary": {"price": {"value": f"{float(p['price']):.2f}", "currency": eb.currency}},
+        "pricingSummary": {"price": {"value": market_price(p["price"], eb.currency), "currency": eb.currency}},
         "listingPolicies": {k: v for k, v in ctx["policies"].items() if v},
         "merchantLocationKey": ctx["location"],
         "includeCatalogProductDetails": True,
@@ -236,81 +262,125 @@ def push_one(eb, p, a, ctx):
     return {"offerId": offer_id, "listingId": res.get("listingId"), "published": True}
 
 
+def parse_markets(a):
+    if a.markets:
+        v = a.markets.strip().lower()
+        if v == "all":
+            ms = list(MARKETS)
+        elif v == "eur":
+            ms = list(EURO_MARKETS)
+        else:
+            ms = [m.strip().upper() for m in a.markets.split(",") if m.strip()]
+    else:
+        ms = [a.market or "EBAY_ES"]
+    bad = [m for m in ms if m not in MARKETS]
+    if bad or not ms:
+        sys.exit(f"Unknown eBay site(s): {', '.join(bad) or '(none)'}. Known: {', '.join(MARKETS)}, or 'eur' / 'all'.")
+    return list(dict.fromkeys(ms))
+
+
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # accents on Windows consoles
     ap = argparse.ArgumentParser()
     ap.add_argument("json_file")
-    ap.add_argument("--market", default="EBAY_ES", choices=sorted(MARKETS))
-    ap.add_argument("--category-id", help="eBay leaf category id (else suggested from title)")
+    ap.add_argument("--market", default=None, choices=sorted(MARKETS), help="one site (default EBAY_ES)")
+    ap.add_argument("--markets", help="several sites, comma separated (EBAY_ES,EBAY_DE,...), or 'eur' / 'all'")
+    ap.add_argument("--category-id", help="eBay leaf category id (else suggested from title, per site)")
     ap.add_argument("--quantity", type=int, default=1)
-    ap.add_argument("--language", default=None, help="book language aspect, default from market")
-    ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--language", default=None, help="book language aspect (default: BOOK_LANGUAGE in each site's words)")
+    ap.add_argument("--limit", type=int, default=0, help="max new listings per site")
     ap.add_argument("--no-publish", action="store_true", help="create unpublished offers only")
     ap.add_argument("--dry-run", action="store_true", help="show payloads, call nothing but lookups")
     ap.add_argument("--sandbox", action="store_true")
     ap.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     a = ap.parse_args()
+    markets = parse_markets(a)
 
     raw = json.loads(Path(a.json_file).read_text(encoding="utf-8"))
     if isinstance(raw, dict):
         raw = raw.get("products", [])
     state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
 
-    todo = []
+    products = []
     for i, r in enumerate(raw, 1):
         p = normalize(r)
-        key = f"{a.market}:{p['sku']}"
-        if key in state and state[key].get("published") == (not a.no_publish):
-            print(f"[{i}] already done: {p['title']}")
-            continue
         probs = validate(p)
         if probs:
             print(f"[{i}] SKIP '{p['title']}': " + "; ".join(probs))
             continue
-        todo.append((i, key, p))
-    if a.limit:
-        todo = todo[: a.limit]
-    print(f"{len(todo)} item(s) for {a.market}.")
-    if not todo:
+        products.append((i, p))
+
+    def done(key):
+        return key in state and state[key].get("published") == (not a.no_publish)
+
+    todo = {}
+    for market in markets:
+        items = [(i, f"{market}:{p['sku']}", p) for i, p in products if not done(f"{market}:{p['sku']}")]
+        todo[market] = items[: a.limit] if a.limit else items
+        already = len(products) - len(items)
+        print(f"{market}: {len(todo[market])} item(s) to list" + (f", {already} already done" if already else ""))
+    if not any(todo.values()):
         return
 
-    eb = Ebay(a.sandbox, a.market)
-    a.language = a.language or LANG_NAMES.get(eb.lang[:2], "English")
+    eb0 = Ebay(a.sandbox, markets[0])
     if a.dry_run and not all(os.environ.get(k) for k in ("EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "EBAY_REFRESH_TOKEN")):
         print("(dry run without credentials: showing item payload only)")
-        for i, key, p in todo[:3]:
-            print(f"[{i}]", json.dumps(inventory_item_body(p, eb, a.language), ensure_ascii=False)[:600])
+        for market in markets:
+            eb = Ebay(a.sandbox, market)
+            lang = a.language or book_language(eb.lang)
+            for i, key, p in todo[market][:3]:
+                body = inventory_item_body(p, eb, lang)
+                print(f"[{i}] {market} {market_price(p['price'], eb.currency)} {eb.currency}",
+                      json.dumps(body, ensure_ascii=False)[:600])
         return
 
-    eb.login()
-    ctx = {
-        "location": eb.location_key(),
-        "policies": {
-            "fulfillmentPolicyId": eb.first_policy("fulfillment_policy", "fulfillmentPolicies", "fulfillmentPolicyId", "EBAY_FULFILLMENT_POLICY_ID"),
-            "paymentPolicyId": eb.first_policy("payment_policy", "paymentPolicies", "paymentPolicyId", "EBAY_PAYMENT_POLICY_ID"),
-            "returnPolicyId": eb.first_policy("return_policy", "returnPolicies", "returnPolicyId", "EBAY_RETURN_POLICY_ID"),
-        },
-    }
-    if not ctx["location"]:
+    eb0.login()
+    location = eb0.location_key()
+    if not location:
         sys.exit("No inventory location found. Create one in Seller Hub or set EBAY_LOCATION_KEY.")
-    if not ctx["policies"]["fulfillmentPolicyId"] or not ctx["policies"]["returnPolicyId"]:
-        sys.exit(f"Missing shipping/return business policy for {a.market}. Create them in Seller Hub.")
+    sites = []
+    for market in markets:
+        if not todo[market]:
+            continue
+        eb = Ebay(a.sandbox, market)
+        eb.token, eb.app_token = eb0.token, eb0.app_token
+        try:
+            policies = {
+                "fulfillmentPolicyId": eb.first_policy("fulfillment_policy", "fulfillmentPolicies", "fulfillmentPolicyId", "EBAY_FULFILLMENT_POLICY_ID"),
+                "paymentPolicyId": eb.first_policy("payment_policy", "paymentPolicies", "paymentPolicyId", "EBAY_PAYMENT_POLICY_ID"),
+                "returnPolicyId": eb.first_policy("return_policy", "returnPolicies", "returnPolicyId", "EBAY_RETURN_POLICY_ID"),
+            }
+        except RuntimeError as e:
+            print(f"! {market}: could not read business policies ({e}); site skipped")
+            continue
+        if not policies["fulfillmentPolicyId"] or not policies["returnPolicyId"]:
+            print(f"! {market}: missing shipping/return business policy for this site. "
+                  f"Create them in Seller Hub; site skipped.")
+            continue
+        sites.append((market, eb, {"location": location, "policies": policies}))
+    if not sites:
+        sys.exit("No eBay site is ready (business policies missing). Create them in Seller Hub.")
 
+    total = sum(len(todo[m]) for m, _, _ in sites)
     if not (a.dry_run or a.no_publish or a.yes):
-        if input(f"This will publish {len(todo)} LIVE listing(s) on {a.market}. Type 'yes': ").strip().lower() != "yes":
+        names = ", ".join(m for m, _, _ in sites)
+        if input(f"This will publish {total} LIVE listing(s) on {names}. Type 'yes': ").strip().lower() != "yes":
             return
 
-    for n, (i, key, p) in enumerate(todo, 1):
-        print(f"[{i}] ({n}/{len(todo)}) {p['title']}")
-        try:
-            res = push_one(eb, p, a, ctx)
-            if res:
-                state[key] = res
-                STATE_FILE.write_text(json.dumps(state, indent=2))
-                print("   ok:", res)
-        except Exception as e:
-            print(f"   ! failed: {e}")
-        time.sleep(0.5)
+    for market, eb, ctx in sites:
+        a.language_now = a.language or book_language(eb.lang)
+        print(f"--- {market} ({eb.currency}) ---")
+        for n, (i, key, p) in enumerate(todo[market], 1):
+            print(f"[{i}] ({n}/{len(todo[market])}) {p['title']}")
+            try:
+                res = push_one(eb, p, a, ctx)
+                if res:
+                    state[key] = res
+                    STATE_FILE.write_text(json.dumps(state, indent=2))
+                    print("   ok:", res)
+            except Exception as e:
+                print(f"   ! failed: {e}")
+            time.sleep(0.5)
 
 
 if __name__ == "__main__":

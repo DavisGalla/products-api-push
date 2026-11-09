@@ -95,7 +95,7 @@ doesn't contain any marketplace logic.
 | Marketplace | API | Authentication | How a book is listed | Documentation |
 |---|---|---|---|---|
 | Vinted | Vinted Pro Integrations API | Access key + signing key; every request is HMAC-SHA256 signed | Creates a new item (own photos, text, price). Processed asynchronously. | Official, public |
-| eBay (EU) | Sell Inventory API | OAuth refresh token | Inventory item → offer → publish | Official, public |
+| eBay (EU, 11 sites) | Sell Inventory API | OAuth refresh token | Inventory item → offer → publish, on one site or several per run (`--markets`; prices converted for GBP/CHF/PLN) | Official, public |
 | Amazon (ES, DE, FR, IT, NL, BE, PL, SE, IE; UK optional) | Selling Partner API: Catalog Items + Listings Items | Login with Amazon refresh token | Finds the existing Amazon page by ISBN in each store, adds an offer (price, condition, stock). Converts SEK/PLN/GBP prices. | Official, public |
 | Casa del Libro | Mirakl seller API | API key | Matches the catalog by EAN, uploads all offers as one CSV import, reads the error report | Mirakl standard |
 | Fnac | Fnac Marketplace API v2.6 (XML) | Partner ID + shop ID + key → session token | Sends offers by EAN in batches, polls the batch status | Official, public |
@@ -217,7 +217,7 @@ credentials, and doesn't contact any real API:
 | Test | What is faked | Checks |
 |---|---|---|
 | `test_vinted_api.py` | Vinted Pro API (including HMAC signature verification) | 15 |
-| `test_ebay.py` | eBay APIs | 9 |
+| `test_ebay.py` | eBay APIs (one site and several sites per run: per-site policies, currency conversion, language aspect) | 19 |
 | `test_amazon.py` | SP-API: Catalog, Listings, Login with Amazon | 21 |
 | `test_casadellibro.py` | Mirakl API | 21 |
 | `test_fnac.py` | Fnac XML API | 17 |
@@ -242,7 +242,7 @@ credentials, and doesn't contact any real API:
 | `test_fruugo.py` | Retailer side of the Fruugo feed (local web server for images and feed, SFTP via paramiko with pinned host key) and the documented CSV rules | 36 |
 | `test_cdon.py` | CDON merchant API (Basic auth, bulk create/update with limits, market currencies, asynchronous batch and SKU statuses, sku_already_exists, categories, 429) | 26 |
 | `test_push_all.py` | Fake pushers + fake mail server | 24 |
-| **Total** | | **568, all passing** |
+| **Total** | | **578, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.

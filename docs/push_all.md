@@ -92,7 +92,7 @@ One pusher failing doesn't stop the others.
   "email": {"to": ["you@example.com", "boss@example.com"], "when": "always"},
   "pushers": {
     "vinted":        {"enabled": true,  "args": ["--catalog-id", "1234", "--package-size-id", "1"]},
-    "ebay":          {"enabled": false, "args": ["--market", "EBAY_ES"]},
+    "ebay":          {"enabled": false, "args": ["--markets", "all"]},
     "amazon":        {"enabled": true,  "args": ["--markets", "all"]},
     "casadellibro":  {"enabled": false, "args": []},
     "fnac":          {"enabled": false, "args": []},
