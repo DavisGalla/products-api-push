@@ -20,7 +20,7 @@ other documents in `docs/`.
 
 ## Purpose
 
-Book products scraped from a source shop are listed automatically on nineteen
+Book products scraped from a source shop are listed automatically on twenty
 marketplaces through their **official seller APIs**. After every run, one
 email reports what happened on each marketplace.
 
@@ -37,6 +37,7 @@ flowchart LR
     R --> CL[casadellibro_push.py] --> CLA[Casa del Libro<br>Mirakl API]
     R --> F[fnac_push.py] --> FA[Fnac Marketplace API]
     R --> AB[abebooks_push.py] --> ABA[AbeBooks / IberLibro<br>Inventory Update API]
+    R --> BL[booklooker_push.py] --> BLA[booklooker.de<br>REST API 2.0]
     R --> EC[elcorteingles_push.py] --> ECA[El Corte Inglés<br>Mirakl API]
     R --> CF[carrefour_push.py] --> CFA[Carrefour<br>Mirakl API]
     R --> W[worten_push.py] --> WA[Worten PT/ES<br>Mirakl API]
@@ -57,7 +58,7 @@ flowchart LR
 The solution has three layers:
 
 1. **Input**: the scraper's products JSON, plus the run configuration.
-2. **Pushers**: nineteen independent scripts, one per marketplace. Each turns the
+2. **Pushers**: twenty independent scripts, one per marketplace. Each turns the
    common product format into that marketplace's API calls.
 3. **Orchestration and reporting**: `push_all.py` runs the enabled pushers,
    works out each one's result, saves logs, and emails one report through
@@ -73,7 +74,7 @@ stored in the code, the repository, or the configuration.
 | Scraper (separate project) | Produces `books.json`: id, title, price, ISBN, condition, images, stock | Python |
 | `push_all_config.json` | Which pushers run, their options, products file, report recipients, timeouts | JSON, not in git |
 | **`push_all.py`** | Runs the pushers one after another, counts results, writes logs, sends the email, prevents overlapping runs | Python standard library only |
-| 19 pushers (`*_push.py`) | One per marketplace: validate products, match the catalog, create or update listings, record what was pushed | Python + `requests` (Vinted: standard library) |
+| 20 pushers (`*_push.py`) | One per marketplace: validate products, match the catalog, create or update listings, record what was pushed | Python + `requests` (Vinted: standard library) |
 | State files (`*_posted.json`) | Per marketplace, what has already been pushed, so re-runs don't duplicate | JSON, local, not in git |
 | Bitwarden Secrets Manager + `bws` | Stores all credentials and injects them as environment variables at start-up | Bitwarden cloud, `bws` 2.1.0 |
 | Gmail account | Sends the report (SMTP, port 465, TLS, App Password) | Gmail |
@@ -94,6 +95,7 @@ doesn't contain any marketplace logic.
 | Casa del Libro | Mirakl seller API | API key | Matches the catalog by EAN, uploads all offers as one CSV import, reads the error report | Mirakl standard |
 | Fnac | Fnac Marketplace API v2.6 (XML) | Partner ID + shop ID + key → session token | Sends offers by EAN in batches, polls the batch status | Official, public |
 | AbeBooks / IberLibro (+ ZVAB, by invitation) | AbeBooks Inventory Update API (XML) | Username + API key | Describes its own copy of a book; no catalog match needed. Add / update / delete. The same inventory is listed on all AbeBooks sites, including ZVAB. | Official PDF |
+| booklooker.de (Germany) | booklooker REST API 2.0 | API key → 10-minute token | Own copy of a book (no catalog match); all offers in one tab-separated article file in booklooker's template format; new books completed from the VLB | Official, public |
 | El Corte Inglés | Mirakl seller API | API key | Same flow as Casa del Libro | Mirakl standard; El Corte Inglés doesn't publish its own documentation |
 | Carrefour (ES; FR is a separate instance) | Mirakl seller API | API key | Same flow as Casa del Libro | Mirakl standard; Carrefour doesn't publish its own documentation |
 | Worten (Portugal + Spain, one shop) | Mirakl seller API | API key | Same flow as Casa del Libro; one price for both countries | Mirakl standard; Worten doesn't publish its own documentation |
@@ -148,7 +150,7 @@ marketplace's rate limits, and one pusher failing doesn't stop the others.
   time). This prevents duplicate listings on re-runs, and it's also how the
   runner counts what was pushed.
 - **Updates:**
-  - `--resend` re-sends price and stock (Casa del Libro, Fnac, AbeBooks,
+  - `--resend` re-sends price and stock (Casa del Libro, Fnac, AbeBooks, booklooker,
     El Corte Inglés, Carrefour, Worten, IBS.it, Empik, E.Leclerc, Kaufland, bol.com, Cdiscount, Allegro, AliExpress, Temu, TikTok Shop). Vinted, eBay and Amazon only
     create listings so far; their APIs support updates (see
     [capabilities.md](capabilities.md)).
@@ -210,6 +212,7 @@ credentials, and doesn't contact any real API:
 | `test_casadellibro.py` | Mirakl API | 21 |
 | `test_fnac.py` | Fnac XML API | 17 |
 | `test_abebooks.py` | AbeBooks Inventory Update API | 22 |
+| `test_booklooker.py` | booklooker REST API 2.0 (token, account readiness, article file upload, error IDs) | 18 |
 | `test_elcorteingles.py` | Mirakl API | 21 |
 | `test_carrefour.py` | Mirakl API | 21 |
 | `test_worten.py` | Mirakl API | 21 |
@@ -224,7 +227,7 @@ credentials, and doesn't contact any real API:
 | `test_temu.py` | Temu Partner API (signature, category template, variation, photo upload, goods add, stock/price/sale status) | 22 |
 | `test_tiktok.py` | TikTok Shop Partner API (signature, tokens, shop cipher, attributes/rules, GPSR, photo upload, create, stock/price, activate/deactivate) | 28 |
 | `test_push_all.py` | Fake pushers + fake mail server | 24 |
-| **Total** | | **418, all passing** |
+| **Total** | | **436, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.
@@ -233,7 +236,7 @@ fields, limits, error codes, and asynchronous processing.
 
 | Part | Status |
 |---|---|
-| All 19 pushers | Built and passing their tests. **Not yet run against the real marketplaces**, because there are no seller accounts or API credentials yet. |
+| All 20 pushers | Built and passing their tests. **Not yet run against the real marketplaces**, because there are no seller accounts or API credentials yet. |
 | Runner + email report | Built and tested. **Verified for real on 2026-11-05**: credentials from Bitwarden, test email and dry-run report delivered through Gmail. |
 | Bitwarden Secrets Manager | Set up and working (project, machine account, token, `bws` 2.1.0). |
 | Server | Not yet deployed. The commands and steps are documented. |

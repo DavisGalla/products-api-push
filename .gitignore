@@ -8,6 +8,8 @@ fnac_posted.json
 fnac_offers.xml
 abebooks_posted.json
 abebooks_request.xml
+booklooker_posted.json
+booklooker_articles.txt
 posted.json
 tests/run_pusher_tests.py
 

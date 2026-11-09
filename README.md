@@ -10,6 +10,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `casadellibro_push.py` | Casa del Libro marketplace (Mirakl seller API) | API key | [docs/casadellibro_push.md](docs/casadellibro_push.md) |
 | `fnac_push.py` | Fnac marketplace: Fnac.es, Fnac.com... (Fnac Marketplace API v2.6) | partner ID + shop ID + key | [docs/fnac_push.md](docs/fnac_push.md) |
 | `abebooks_push.py` | AbeBooks / IberLibro, and ZVAB once AbeBooks invites you (AbeBooks Inventory Update API) | username + API key | [docs/abebooks_push.md](docs/abebooks_push.md) |
+| `booklooker_push.py` | booklooker.de, Germany (booklooker REST API 2.0) | API key | [docs/booklooker_push.md](docs/booklooker_push.md) |
 | `elcorteingles_push.py` | El Corte Inglés marketplace (Mirakl seller API) | API key | [docs/elcorteingles_push.md](docs/elcorteingles_push.md) |
 | `carrefour_push.py` | Carrefour marketplace (Mirakl seller API) | API key | [docs/carrefour_push.md](docs/carrefour_push.md) |
 | `worten_push.py` | Worten marketplace, Portugal + Spain (Mirakl seller API) | API key | [docs/worten_push.md](docs/worten_push.md) |
@@ -194,6 +195,25 @@ python abebooks_push.py push --limit 1                    # one real listing; ch
 python abebooks_push.py push                              # the rest
 python abebooks_push.py push --resend --delete-sold-out   # later: sync price and stock, remove sold-out books
 python abebooks_push.py delete 142534                     # remove a listing
+```
+
+---
+
+## booklooker quick start
+
+booklooker.de (Germany) works like AbeBooks: you list your own copy of each book,
+and no catalog match is needed. All books are uploaded as one tab-separated
+article file in booklooker's own template format. New books need an ISBN, a
+commercial account, and the German fixed book price. Generate the API key on
+booklooker.de.
+
+```powershell
+$env:BOOKLOOKER_API_KEY = "..."
+
+python booklooker_push.py check            # API key works, account ready to sell books?
+python booklooker_push.py push --dry-run   # writes booklooker_articles.txt, uploads nothing
+python booklooker_push.py push --limit 1   # one real offer
+python booklooker_push.py status           # ACTIVE / SOLD / DELETED
 ```
 
 ---
@@ -490,7 +510,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All nineteen scripts have only been tested against local mocks of the APIs. Before you
+All twenty scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -516,6 +536,10 @@ push your whole catalogue, try one item at a time:
 - **AbeBooks / IberLibro:**
   1. `push --dry-run` builds the request. Look through it.
   2. `push --limit 1` returns code `600`. Find the book in your seller account or on IberLibro.
+- **booklooker:**
+  1. `check` accepts the API key and shows the account as ready to sell books.
+  2. `push --dry-run` builds `booklooker_articles.txt`. Look through it.
+  3. `push --limit 1` followed by `status` shows the offer as `ACTIVE`.
 - **El Corte Inglés:**
   1. `check` shows your shop, and `states` confirms `11` is "New".
   2. `push --dry-run` builds the offer file. Look through it.
@@ -578,6 +602,7 @@ python tests\test_amazon.py
 python tests\test_casadellibro.py
 python tests\test_fnac.py
 python tests\test_abebooks.py
+python tests\test_booklooker.py
 python tests\test_elcorteingles.py
 python tests\test_carrefour.py
 python tests\test_worten.py
