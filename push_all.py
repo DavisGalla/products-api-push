@@ -107,6 +107,9 @@ PUSHERS = {
     "tiktok": dict(label="TikTok Shop", script="tiktok_push.py", sub=True, yes=True,
                    state="tiktok_posted.json", dry=["--dry-run"],
                    env=["TIKTOK_APP_KEY", "TIKTOK_APP_SECRET"]),
+    "galaxus": dict(label="Galaxus", script="galaxus_push.py", sub=True, yes=True,
+                    state="galaxus_posted.json", dry=["--dry-run"],
+                    env=["GALAXUS_SFTP_USER", "GALAXUS_SFTP_PASSWORD", "GALAXUS_PROVIDER"]),
 }
 
 RE_SKIP = re.compile(r"\bSKIP\b")
@@ -200,7 +203,7 @@ def run_pusher(name, spec, settings, cfg, a, log_dir):
            "problems": [], "tail": [], "exit_code": None, "seconds": 0, "log": None}
     missing = [k for k in required_env(name, spec, settings) if not os.environ.get(k)]
     # dry runs of these pushers build their files without credentials
-    if missing and not (a.dry_run and name in ("fnac", "abebooks", "ebay", "kaufland")):
+    if missing and not (a.dry_run and name in ("fnac", "abebooks", "ebay", "kaufland", "galaxus")):
         res.update(status="NOT CONFIGURED", note="missing " + ", ".join(missing))
         return res
 

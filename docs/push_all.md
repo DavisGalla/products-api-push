@@ -56,7 +56,8 @@ push_all.py ── push_all_config.json (what to run)
         ├─► allegro_push.py push …       │
         ├─► aliexpress_push.py push …    │
         ├─► temu_push.py push …          │
-        └─► tiktok_push.py push …        ─┘
+        ├─► tiktok_push.py push …        │
+        └─► galaxus_push.py push …       ─┘
         │
         ├─► logs/<date_time>/<pusher>.log + report.txt
         └─► Gmail (SMTP) ─► report email
@@ -103,7 +104,8 @@ One pusher failing doesn't stop the others.
     "allegro":       {"enabled": false, "args": []},
     "aliexpress":    {"enabled": false, "args": []},
     "temu":          {"enabled": false, "args": []},
-    "tiktok":        {"enabled": false, "args": []}
+    "tiktok":        {"enabled": false, "args": []},
+    "galaxus":       {"enabled": false, "args": []}
   }
 }
 ```

@@ -24,6 +24,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `aliexpress_push.py` | AliExpress as a local seller, e.g. aliexpress.es (AliExpress Open Platform API) | app key + secret, seller authorization (OAuth) | [docs/aliexpress_push.md](docs/aliexpress_push.md) |
 | `temu_push.py` | Temu as a local seller in Europe, e.g. temu.com/es (Temu Partner API) | app key + secret + access token from Seller Center | [docs/temu_push.md](docs/temu_push.md) |
 | `tiktok_push.py` | TikTok Shop Spain and other EU shops (TikTok Shop Partner API) | app key + secret, seller authorization (OAuth) | [docs/tiktok_push.md](docs/tiktok_push.md) |
+| `galaxus_push.py` | Galaxus Switzerland / Germany (StockPricingData feed over SFTP) | SFTP user + password from the Galaxus onboarding | [docs/galaxus_push.md](docs/galaxus_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
@@ -486,6 +487,23 @@ python tiktok_push.py push --limit 1               # one real product
 python tiktok_push.py status
 ```
 
+## Galaxus quick start
+
+Galaxus (galaxus.ch, galaxus.de) has no listing API. Offers are delivered as a
+data feed: one `StockPricingData` CSV file (ISBN, price excl. VAT, stock) on
+the Galaxus SFTP server, which Galaxus imports every 30 minutes and matches to
+its catalog by ISBN. Only new books are offered; the file is always the full
+assortment. You need the SFTP login from the Galaxus onboarding, and the
+`paramiko` package.
+
+```powershell
+pip install paramiko
+python galaxus_push.py check            # SFTP login, feed file on the server
+python galaxus_push.py push --dry-run   # writes galaxus_feed.csv, uploads nothing
+python galaxus_push.py push             # uploads the feed (only when it changed)
+python galaxus_push.py status
+```
+
 ---
 
 ## Run everything and get an email report
@@ -510,7 +528,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All twenty scripts have only been tested against local mocks of the APIs. Before you
+All twenty-one scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -592,6 +610,10 @@ push your whole catalogue, try one item at a time:
   1. `check` shows the shop, a warehouse and the GPSR responsible person and manufacturer.
   2. `attributes <category>` shows what to put in `PRODUCT_ATTRIBUTES`, and `push --dry-run` builds the products.
   3. `push --limit 1`, then `status` until TikTok's review shows it as `LIVE`.
+- **Galaxus:**
+  1. `check` logs in to the SFTP server (the host key is pinned).
+  2. `push --dry-run` builds `galaxus_feed.csv`. Look through it.
+  3. `push --limit 1`, then check the feed in the Partner Portal (Katalog → Feeds).
 
 ## Tests
 
@@ -616,6 +638,7 @@ python tests\test_allegro.py
 python tests\test_aliexpress.py
 python tests\test_temu.py
 python tests\test_tiktok.py
+python tests\test_galaxus.py
 python tests\test_push_all.py
 ```
 
@@ -623,3 +646,5 @@ Each pusher test starts a fake API on `127.0.0.1:8765` and runs the script again
 [tests/test_products.json](tests/test_products.json). They need no
 credentials, and nothing is sent to any marketplace. `test_push_all.py` uses
 fake pushers and a fake mail server on `127.0.0.1:8766`.
+`test_galaxus.py` instead runs a local SFTP server on a free port and needs
+`pip install paramiko`.

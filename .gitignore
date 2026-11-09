@@ -53,6 +53,9 @@ tiktok_posted.json
 tiktok_products.json
 tiktok_token.json
 tiktok_cache.json
+galaxus_posted.json
+galaxus_upload.json
+galaxus_feed.csv
 
 # push_all runner (local config, credentials, logs)
 push_all_config.json

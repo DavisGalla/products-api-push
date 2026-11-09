@@ -25,6 +25,7 @@
     "allegro":       {"enabled": false, "args": []},
     "aliexpress":    {"enabled": false, "args": []},
     "temu":          {"enabled": false, "args": []},
-    "tiktok":        {"enabled": false, "args": []}
+    "tiktok":        {"enabled": false, "args": []},
+    "galaxus":       {"enabled": false, "args": []}
   }
 }
