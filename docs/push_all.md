@@ -58,7 +58,8 @@ push_all.py ── push_all_config.json (what to run)
         ├─► temu_push.py push …          │
         ├─► tiktok_push.py push …        │
         ├─► galaxus_push.py push …       │
-        └─► otto_push.py push …          ─┘
+        ├─► otto_push.py push …          │
+        └─► emag_push.py push …          ─┘
         │
         ├─► logs/<date_time>/<pusher>.log + report.txt
         └─► Gmail (SMTP) ─► report email
@@ -107,7 +108,8 @@ One pusher failing doesn't stop the others.
     "temu":          {"enabled": false, "args": []},
     "tiktok":        {"enabled": false, "args": []},
     "galaxus":       {"enabled": false, "args": []},
-    "otto":          {"enabled": false, "args": []}
+    "otto":          {"enabled": false, "args": []},
+    "emag":          {"enabled": false, "args": []}
   }
 }
 ```

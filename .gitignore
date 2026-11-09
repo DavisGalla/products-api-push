@@ -59,6 +59,9 @@ galaxus_feed.csv
 otto_posted.json
 otto_products.json
 otto_brands.json
+emag_posted.json
+emag_ids.json
+emag_offers.json
 
 # push_all runner (local config, credentials, logs)
 push_all_config.json

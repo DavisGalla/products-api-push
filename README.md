@@ -26,6 +26,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `tiktok_push.py` | TikTok Shop Spain and other EU shops (TikTok Shop Partner API) | app key + secret, seller authorization (OAuth) | [docs/tiktok_push.md](docs/tiktok_push.md) |
 | `galaxus_push.py` | Galaxus Switzerland / Germany (StockPricingData feed over SFTP) | SFTP user + password from the Galaxus onboarding | [docs/galaxus_push.md](docs/galaxus_push.md) |
 | `otto_push.py` | OTTO Market, Germany (OTTO Market API: Products v5, Availability v1) | client ID + secret of an OTTO Partner Connect self-app | [docs/otto_push.md](docs/otto_push.md) |
+| `emag_push.py` | eMAG Romania, Bulgaria, Hungary (eMAG Marketplace API v4.5) | API user + password, whitelisted IP | [docs/emag_push.md](docs/emag_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
@@ -525,6 +526,24 @@ python otto_push.py push --limit 1             # one real product
 python otto_push.py status                     # ONLINE / REJECTED and OTTO's reasons
 ```
 
+## eMAG quick start
+
+eMAG (Romania, Bulgaria, Hungary) works like Kaufland: each book is matched
+to an existing eMAG product by its ISBN, and your offer is attached to it.
+Books eMAG doesn't know are skipped. eMAG prices are without VAT; the script
+takes VAT out of your gross EUR prices and sends them in EUR (eMAG converts
+them). You need an API user, and eMAG must whitelist the IP address the
+script runs from. Request access to the books categories in the eMAG
+Marketplace interface.
+
+```powershell
+python emag_push.py check                     # login, VAT rates, handling times
+python emag_push.py lookup 9788409591923      # does eMAG know this ISBN?
+python emag_push.py push --dry-run            # writes emag_offers.json, sends nothing
+python emag_push.py push --limit 1            # one real offer
+python emag_push.py status                    # for sale? price valid? buy button rank
+```
+
 ---
 
 ## Run everything and get an email report
@@ -549,7 +568,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All twenty-two scripts have only been tested against local mocks of the APIs. Before you
+All twenty-three scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -639,6 +658,10 @@ push your whole catalogue, try one item at a time:
   1. `check` shows a shipping profile, the category and the GPSR address as OK.
   2. `attributes <category>` shows what to put in `ATTRIBUTES`, and `push --dry-run` builds the products.
   3. `push --limit 1`, then `status` until the product is `ONLINE`.
+- **eMAG:**
+  1. `check` logs in (from a whitelisted IP) and finds the books VAT rate.
+  2. `lookup <isbn>` shows whether eMAG knows the book and whether you may sell in its category.
+  3. `push --limit 1`, then `status` until it shows `FOR SALE`.
 
 ## Tests
 
@@ -665,6 +688,7 @@ python tests\test_temu.py
 python tests\test_tiktok.py
 python tests\test_galaxus.py
 python tests\test_otto.py
+python tests\test_emag.py
 python tests\test_push_all.py
 ```
 

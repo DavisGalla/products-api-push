@@ -27,6 +27,7 @@
     "temu":          {"enabled": false, "args": []},
     "tiktok":        {"enabled": false, "args": []},
     "galaxus":       {"enabled": false, "args": []},
-    "otto":          {"enabled": false, "args": []}
+    "otto":          {"enabled": false, "args": []},
+    "emag":          {"enabled": false, "args": []}
   }
 }

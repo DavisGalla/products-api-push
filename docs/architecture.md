@@ -20,7 +20,7 @@ other documents in `docs/`.
 
 ## Purpose
 
-Book products scraped from a source shop are listed automatically on twenty-two
+Book products scraped from a source shop are listed automatically on twenty-three
 marketplaces through their **official seller APIs**. After every run, one
 email reports what happened on each marketplace.
 
@@ -53,6 +53,7 @@ flowchart LR
     R --> TT[tiktok_push.py] --> TTA[TikTok Shop<br>Partner API]
     R --> GX[galaxus_push.py] --> GXA[Galaxus CH/DE<br>feed over SFTP]
     R --> OT[otto_push.py] --> OTA[OTTO Market DE<br>Products API v5]
+    R --> EG[emag_push.py] --> EGA[eMAG RO/BG/HU<br>Marketplace API]
     R --> L[logs/ + report.txt]
     R -->|SMTP over TLS| G[Gmail] --> M[Report email]
 ```
@@ -60,7 +61,7 @@ flowchart LR
 The solution has three layers:
 
 1. **Input**: the scraper's products JSON, plus the run configuration.
-2. **Pushers**: twenty-two independent scripts, one per marketplace. Each turns the
+2. **Pushers**: twenty-three independent scripts, one per marketplace. Each turns the
    common product format into that marketplace's API calls.
 3. **Orchestration and reporting**: `push_all.py` runs the enabled pushers,
    works out each one's result, saves logs, and emails one report through
@@ -76,7 +77,7 @@ stored in the code, the repository, or the configuration.
 | Scraper (separate project) | Produces `books.json`: id, title, price, ISBN, condition, images, stock | Python |
 | `push_all_config.json` | Which pushers run, their options, products file, report recipients, timeouts | JSON, not in git |
 | **`push_all.py`** | Runs the pushers one after another, counts results, writes logs, sends the email, prevents overlapping runs | Python standard library only |
-| 22 pushers (`*_push.py`) | One per marketplace: validate products, match the catalog, create or update listings, record what was pushed | Python + `requests` (Vinted: standard library) |
+| 23 pushers (`*_push.py`) | One per marketplace: validate products, match the catalog, create or update listings, record what was pushed | Python + `requests` (Vinted: standard library) |
 | State files (`*_posted.json`) | Per marketplace, what has already been pushed, so re-runs don't duplicate | JSON, local, not in git |
 | Bitwarden Secrets Manager + `bws` | Stores all credentials and injects them as environment variables at start-up | Bitwarden cloud, `bws` 2.1.0 |
 | Gmail account | Sends the report (SMTP, port 465, TLS, App Password) | Gmail |
@@ -113,6 +114,7 @@ doesn't contain any marketplace logic.
 | TikTok Shop (Spain, EU) | TikTok Shop Partner API (202309+) | App key + secret (HMAC-SHA256 signed) and the seller's OAuth token, refreshed automatically | Creates its own product per book in one configured category, with GPSR IDs; TikTok reviews it | Official docs are a web app; built from a generated OpenAPI spec and a widely used client |
 | Galaxus (Switzerland, Germany) | Galaxus data feed (stage 1, offer assignment): `StockPricingData` CSV on the Galaxus SFTP server | SFTP user + password; the server's host key is pinned | One feed file with every offer (ISBN, price excl. VAT in CHF or EUR, stock), matched to the Galaxus catalog by GTIN; uploaded as `tmp_` and renamed; imported every 30 minutes | Official, public (Confluence) |
 | OTTO Market (Germany) | OTTO Market API: Products v5 + Availability v1 | Client ID + secret of a Partner Connect self-app → token (client credentials, scopes `products availability`) | Creates its own product per book (category, brand, images, price, GPSR distributor) in batches of 500, waits for the update task and reads the rejected products; then sets stock and the shipping profile | Official, public (OpenAPI) |
+| eMAG (Romania, Bulgaria, Hungary) | eMAG Marketplace API (api-3, documentation v4.5.1) | API user + password (Basic auth); only from whitelisted IPs | Finds the existing eMAG product by EAN (`documentation/find_by_eans`), attaches the offer by part_number_key (`product_offer/save`, price without VAT, min/max price window); updates with the light `offer/save` | Official documentation (Word file from eMAG, v4.5.1) |
 
 All pushers read the same input format and apply the same base rules: skip
 sold-out or incomplete products, map the condition, and convert ISBN-10 to
@@ -155,12 +157,12 @@ marketplace's rate limits, and one pusher failing doesn't stop the others.
   runner counts what was pushed.
 - **Updates:**
   - `--resend` re-sends price and stock (Casa del Libro, Fnac, AbeBooks, booklooker,
-    El Corte Inglés, Carrefour, Worten, IBS.it, Empik, E.Leclerc, Kaufland, bol.com, Cdiscount, Allegro, AliExpress, Temu, TikTok Shop, OTTO Market; Galaxus re-sends its whole feed when anything changed). Vinted, eBay and Amazon only
+    El Corte Inglés, Carrefour, Worten, IBS.it, Empik, E.Leclerc, Kaufland, bol.com, Cdiscount, Allegro, AliExpress, Temu, TikTok Shop, OTTO Market, eMAG; Galaxus re-sends its whole feed when anything changed). Vinted, eBay and Amazon only
     create listings so far; their APIs support updates (see
     [capabilities.md](capabilities.md)).
   - AbeBooks can also delete listings for books that are now sold out, and
     Kaufland, bol.com and Cdiscount can set their stock to 0 (`--zero-sold-out`), Allegro can end the offer (`--end-sold-out`), and AliExpress, Temu
-    and TikTok Shop can take them offline (`--offline-sold-out`). OTTO Market can do both (`--zero-sold-out`, `--offline-sold-out`). Galaxus keeps sold-out books with stock 0, or leaves them out of the feed (`--drop-sold-out`).
+    and TikTok Shop can take them offline (`--offline-sold-out`). OTTO Market and eMAG can do both (`--zero-sold-out`, `--offline-sold-out`). Galaxus keeps sold-out books with stock 0, or leaves them out of the feed (`--drop-sold-out`).
 - **Output files:**
   - logs per run
   - the last generated offer file per marketplace (CSV/XML), so you can check
@@ -196,7 +198,7 @@ The full setup steps are in
 |---|---|
 | One product is invalid | Skipped with its reason; the others continue |
 | A marketplace rejects one offer | Shown in the report with the marketplace's message; not recorded, so it's retried next run |
-| Temporary API error (429/5xx, AbeBooks 1xx) | Retried automatically with backoff by the Amazon, Casa del Libro, Fnac, AbeBooks, El Corte Inglés, Carrefour, Worten, IBS.it, Empik, E.Leclerc, Kaufland, bol.com, Cdiscount, Allegro, AliExpress, Temu, TikTok Shop and OTTO Market pushers (Galaxus: the SFTP upload is retried). Vinted and eBay report the error, and the item is retried on the next run. |
+| Temporary API error (429/5xx, AbeBooks 1xx) | Retried automatically with backoff by the Amazon, Casa del Libro, Fnac, AbeBooks, El Corte Inglés, Carrefour, Worten, IBS.it, Empik, E.Leclerc, Kaufland, bol.com, Cdiscount, Allegro, AliExpress, Temu, TikTok Shop, OTTO Market and eMAG pushers (Galaxus: the SFTP upload is retried). Vinted and eBay report the error, and the item is retried on the next run. |
 | Wrong credentials or a pusher crash | That pusher is `FAILED`, with its last output lines in the email; the others still run |
 | A pusher hangs | Killed after `timeout_minutes`, reported as `FAILED` |
 | Two runs overlap | The second one stops (lock file) |
@@ -232,8 +234,9 @@ credentials, and doesn't contact any real API:
 | `test_tiktok.py` | TikTok Shop Partner API (signature, tokens, shop cipher, attributes/rules, GPSR, photo upload, create, stock/price, activate/deactivate) | 28 |
 | `test_galaxus.py` | Galaxus SFTP server (real SFTP via paramiko: pinned host key, login, tmp_ upload + rename, retries) and the documented feed import | 22 |
 | `test_otto.py` | OTTO Market API (token scopes, Products v5 update tasks, brands/categories, prices, active status, marketplace status, Availability 207 partial failures) | 25 |
+| `test_emag.py` | eMAG Marketplace API (Basic auth, data envelope, find_by_eans, VAT, attach by PNK, price window, batch errors, light offer/save, read with pagination) | 23 |
 | `test_push_all.py` | Fake pushers + fake mail server | 24 |
-| **Total** | | **483, all passing** |
+| **Total** | | **506, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.
@@ -242,7 +245,7 @@ fields, limits, error codes, and asynchronous processing.
 
 | Part | Status |
 |---|---|
-| All 22 pushers | Built and passing their tests. **Not yet run against the real marketplaces**, because there are no seller accounts or API credentials yet. |
+| All 23 pushers | Built and passing their tests. **Not yet run against the real marketplaces**, because there are no seller accounts or API credentials yet. |
 | Runner + email report | Built and tested. **Verified for real on 2026-11-05**: credentials from Bitwarden, test email and dry-run report delivered through Gmail. |
 | Bitwarden Secrets Manager | Set up and working (project, machine account, token, `bws` 2.1.0). |
 | Server | Not yet deployed. The commands and steps are documented. |
