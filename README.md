@@ -25,6 +25,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `temu_push.py` | Temu as a local seller in Europe, e.g. temu.com/es (Temu Partner API) | app key + secret + access token from Seller Center | [docs/temu_push.md](docs/temu_push.md) |
 | `tiktok_push.py` | TikTok Shop Spain and other EU shops (TikTok Shop Partner API) | app key + secret, seller authorization (OAuth) | [docs/tiktok_push.md](docs/tiktok_push.md) |
 | `galaxus_push.py` | Galaxus Switzerland / Germany (StockPricingData feed over SFTP) | SFTP user + password from the Galaxus onboarding | [docs/galaxus_push.md](docs/galaxus_push.md) |
+| `otto_push.py` | OTTO Market, Germany (OTTO Market API: Products v5, Availability v1) | client ID + secret of an OTTO Partner Connect self-app | [docs/otto_push.md](docs/otto_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
@@ -504,6 +505,26 @@ python galaxus_push.py push             # uploads the feed (only when it changed
 python galaxus_push.py status
 ```
 
+## OTTO Market quick start
+
+OTTO (otto.de) has no "offer on an existing product": every seller creates
+the product itself. Each book becomes an OTTO product with its ISBN, one
+OTTO category, a brand from OTTO's list (the publisher if OTTO knows it,
+otherwise your default brand), description, images, price and the GPSR
+distributor address. Stock and delivery go through the Availability API.
+Only new books are sold. You need a self-app in OTTO Partner Connect with
+the interfaces "products" and "availability", and a shipping profile.
+
+```powershell
+python otto_push.py check                      # token, shipping profiles, settings
+python otto_push.py categories --find Buch     # set CATEGORY
+python otto_push.py attributes "<category>"    # fill ATTRIBUTES / FIELD_ATTRIBUTES
+python otto_push.py brands --find <publisher>  # set BRAND_ID
+python otto_push.py push --dry-run             # writes otto_products.json, sends nothing
+python otto_push.py push --limit 1             # one real product
+python otto_push.py status                     # ONLINE / REJECTED and OTTO's reasons
+```
+
 ---
 
 ## Run everything and get an email report
@@ -528,7 +549,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All twenty-one scripts have only been tested against local mocks of the APIs. Before you
+All twenty-two scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -614,6 +635,10 @@ push your whole catalogue, try one item at a time:
   1. `check` logs in to the SFTP server (the host key is pinned).
   2. `push --dry-run` builds `galaxus_feed.csv`. Look through it.
   3. `push --limit 1`, then check the feed in the Partner Portal (Katalog → Feeds).
+- **OTTO Market:**
+  1. `check` shows a shipping profile, the category and the GPSR address as OK.
+  2. `attributes <category>` shows what to put in `ATTRIBUTES`, and `push --dry-run` builds the products.
+  3. `push --limit 1`, then `status` until the product is `ONLINE`.
 
 ## Tests
 
@@ -639,6 +664,7 @@ python tests\test_aliexpress.py
 python tests\test_temu.py
 python tests\test_tiktok.py
 python tests\test_galaxus.py
+python tests\test_otto.py
 python tests\test_push_all.py
 ```
 

@@ -26,6 +26,7 @@
     "aliexpress":    {"enabled": false, "args": []},
     "temu":          {"enabled": false, "args": []},
     "tiktok":        {"enabled": false, "args": []},
-    "galaxus":       {"enabled": false, "args": []}
+    "galaxus":       {"enabled": false, "args": []},
+    "otto":          {"enabled": false, "args": []}
   }
 }

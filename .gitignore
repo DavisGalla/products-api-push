@@ -56,6 +56,9 @@ tiktok_cache.json
 galaxus_posted.json
 galaxus_upload.json
 galaxus_feed.csv
+otto_posted.json
+otto_products.json
+otto_brands.json
 
 # push_all runner (local config, credentials, logs)
 push_all_config.json
