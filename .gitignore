@@ -66,6 +66,8 @@ fruugo_posted.json
 fruugo_publish.json
 fruugo_feed.csv
 fruugo_images/
+cdon_posted.json
+cdon_articles.json
 
 # push_all runner (local config, credentials, logs)
 push_all_config.json

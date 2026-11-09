@@ -60,7 +60,8 @@ push_all.py ── push_all_config.json (what to run)
         ├─► galaxus_push.py push …       │
         ├─► otto_push.py push …          │
         ├─► emag_push.py push …          │
-        └─► fruugo_push.py push …        ─┘
+        ├─► fruugo_push.py push …        │
+        └─► cdon_push.py push …          ─┘
         │
         ├─► logs/<date_time>/<pusher>.log + report.txt
         └─► Gmail (SMTP) ─► report email
@@ -78,6 +79,8 @@ works out each pusher's result from three things:
 One pusher failing doesn't stop the others.
 
 ## Setup
+
+**test run command: bws run -- python push_all.py --dry-run***
 
 **1. The config file.** Copy `push_all_config.example.json` to
 `push_all_config.json`, then edit it:
@@ -111,7 +114,8 @@ One pusher failing doesn't stop the others.
     "galaxus":       {"enabled": false, "args": []},
     "otto":          {"enabled": false, "args": []},
     "emag":          {"enabled": false, "args": []},
-    "fruugo":        {"enabled": false, "args": []}
+    "fruugo":        {"enabled": false, "args": []},
+    "cdon":          {"enabled": false, "args": []}
   }
 }
 ```

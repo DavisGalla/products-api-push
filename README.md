@@ -28,6 +28,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `otto_push.py` | OTTO Market, Germany (OTTO Market API: Products v5, Availability v1) | client ID + secret of an OTTO Partner Connect self-app | [docs/otto_push.md](docs/otto_push.md) |
 | `emag_push.py` | eMAG Romania, Bulgaria, Hungary (eMAG Marketplace API v4.5) | API user + password, whitelisted IP | [docs/emag_push.md](docs/emag_push.md) |
 | `fruugo_push.py` | Fruugo, ~40 countries (CSV product feed at a static URL) | A web location Fruugo can download from (local web folder or SFTP to your host) | [docs/fruugo_push.md](docs/fruugo_push.md) |
+| `cdon_push.py` | CDON Sweden, Denmark, Finland, Norway (CDON merchant API) | Merchant ID + API token | [docs/cdon_push.md](docs/cdon_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
@@ -562,6 +563,23 @@ python fruugo_push.py push                    # publishes images + feed (only wh
 python fruugo_push.py status                  # does the URL serve the last feed?
 ```
 
+## CDON quick start
+
+CDON (cdon.se, cdon.dk, cdon.fi, cdon.no) works like OTTO: each book becomes
+your own CDON article with its ISBN, title, description, images and a price
+per market (converted from EUR, with each country's VAT rate for books). CDON
+processes uploads in the background; the script waits for the result and
+shows what was accepted per market. You need the Merchant ID and API token
+from the CDON Merchant Center.
+
+```powershell
+python cdon_push.py check                     # login, categories, shipping configurations
+python cdon_push.py categories --find book    # set CATEGORY at the top of the script
+python cdon_push.py push --dry-run            # writes cdon_articles.json, sends nothing
+python cdon_push.py push --limit 1            # one real article
+python cdon_push.py status                    # ok / failed (+ reason) per market
+```
+
 ---
 
 ## Run everything and get an email report
@@ -586,7 +604,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All twenty-four scripts have only been tested against local mocks of the APIs. Before you
+All twenty-five scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -684,6 +702,10 @@ push your whole catalogue, try one item at a time:
   1. `check` shows the settings, a writable target folder and the feed URL.
   2. `push --dry-run` builds `fruugo_feed.csv`. Look through it.
   3. `push --limit 1`, send the feed URL to Fruugo, then check the Retailer Portal for feed errors.
+- **CDON:**
+  1. `check` logs in and lists categories and shipping configurations.
+  2. `categories --find book` gives the ID for `CATEGORY`, and `push --dry-run` builds the articles.
+  3. `push --limit 1`, then `status` until every market shows `ok`.
 
 ## Tests
 
@@ -712,6 +734,7 @@ python tests\test_galaxus.py
 python tests\test_otto.py
 python tests\test_emag.py
 python tests\test_fruugo.py
+python tests\test_cdon.py
 python tests\test_push_all.py
 ```
 
