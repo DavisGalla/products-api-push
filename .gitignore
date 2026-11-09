@@ -68,8 +68,6 @@ fruugo_feed.csv
 fruugo_images/
 cdon_posted.json
 cdon_articles.json
-onbuy_posted.json
-onbuy_listings.json
 
 # push_all runner (local config, credentials, logs)
 push_all_config.json

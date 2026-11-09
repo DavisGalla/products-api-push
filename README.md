@@ -29,7 +29,6 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `emag_push.py` | eMAG Romania, Bulgaria, Hungary (eMAG Marketplace API v4.5) | API user + password, whitelisted IP | [docs/emag_push.md](docs/emag_push.md) |
 | `fruugo_push.py` | Fruugo, ~40 countries (CSV product feed at a static URL) | A web location Fruugo can download from (local web folder or SFTP to your host) | [docs/fruugo_push.md](docs/fruugo_push.md) |
 | `cdon_push.py` | CDON Sweden, Denmark, Finland, Norway (CDON merchant API) | Merchant ID + API token | [docs/cdon_push.md](docs/cdon_push.md) |
-| `onbuy_push.py` | OnBuy UK and 20 European sites (OnBuy / OnCommerce API v2) | Consumer key + secret key | [docs/onbuy_push.md](docs/onbuy_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
@@ -586,23 +585,6 @@ python cdon_push.py push --limit 1            # one real article
 python cdon_push.py status                    # ok / failed (+ reason) per market
 ```
 
-## OnBuy quick start
-
-OnBuy (onbuy.com, UK, plus 20 European country sites) works like Kaufland:
-each book is matched to an existing OnBuy product by its ISBN, and your
-listing (price, stock, handling time) is attached to it. Books OnBuy doesn't
-know are skipped. Pick the country sites with `--sites` (`gb`, `es`, `de`, ...
-or `eur` / `all`); prices are converted from EUR where needed. You need the
-consumer key and secret key from the OnBuy Seller Control Panel.
-
-```powershell
-python onbuy_push.py check                    # login, delivery templates
-python onbuy_push.py lookup 9788409591923     # does OnBuy know this ISBN?
-python onbuy_push.py push --dry-run           # writes onbuy_listings.json, sends nothing
-python onbuy_push.py push --limit 1           # one real listing (UK site)
-python onbuy_push.py status                   # price, stock, buy box
-```
-
 ---
 
 ## Run everything and get an email report
@@ -627,7 +609,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All twenty-six scripts have only been tested against local mocks of the APIs. Before you
+All twenty-five scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -729,10 +711,6 @@ push your whole catalogue, try one item at a time:
   1. `check` logs in and lists categories and shipping configurations.
   2. `categories --find book` gives the ID for `CATEGORY`, and `push --dry-run` builds the articles.
   3. `push --limit 1`, then `status` until every market shows `ok`.
-- **OnBuy:**
-  1. `check` logs in and lists your delivery templates.
-  2. `lookup <isbn>` shows whether OnBuy knows the book, and `push --dry-run` builds the listings.
-  3. `push --limit 1`, then `status` shows the listing, its price and the buy box.
 
 ## Tests
 
@@ -762,7 +740,6 @@ python tests\test_otto.py
 python tests\test_emag.py
 python tests\test_fruugo.py
 python tests\test_cdon.py
-python tests\test_onbuy.py
 python tests\test_push_all.py
 ```
 

@@ -122,9 +122,6 @@ PUSHERS = {
     "cdon": dict(label="CDON", script="cdon_push.py", sub=True, yes=True,
                  state="cdon_posted.json", dry=["--dry-run"],
                  env=["CDON_MERCHANT_ID", "CDON_API_TOKEN"]),
-    "onbuy": dict(label="OnBuy", script="onbuy_push.py", sub=True, yes=True,
-                  state="onbuy_posted.json", dry=["--dry-run"],
-                  env=["ONBUY_CONSUMER_KEY", "ONBUY_SECRET_KEY"]),
 }
 
 RE_SKIP = re.compile(r"\bSKIP\b")
@@ -218,7 +215,7 @@ def run_pusher(name, spec, settings, cfg, a, log_dir):
            "problems": [], "tail": [], "exit_code": None, "seconds": 0, "log": None}
     missing = [k for k in required_env(name, spec, settings) if not os.environ.get(k)]
     # dry runs of these pushers build their files without credentials
-    if missing and not (a.dry_run and name in ("fnac", "abebooks", "ebay", "kaufland", "galaxus", "otto", "emag", "fruugo", "cdon", "onbuy")):
+    if missing and not (a.dry_run and name in ("fnac", "abebooks", "ebay", "kaufland", "galaxus", "otto", "emag", "fruugo", "cdon")):
         res.update(status="NOT CONFIGURED", note="missing " + ", ".join(missing))
         return res
 
