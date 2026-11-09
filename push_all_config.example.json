@@ -30,6 +30,7 @@
     "otto":          {"enabled": false, "args": []},
     "emag":          {"enabled": false, "args": []},
     "fruugo":        {"enabled": false, "args": []},
-    "cdon":          {"enabled": false, "args": []}
+    "cdon":          {"enabled": false, "args": []},
+    "onbuy":         {"enabled": false, "args": ["--sites", "gb"]}
   }
 }

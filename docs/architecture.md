@@ -20,7 +20,7 @@ other documents in `docs/`.
 
 ## Purpose
 
-Book products scraped from a source shop are listed automatically on twenty-five
+Book products scraped from a source shop are listed automatically on twenty-six
 marketplaces through their **official seller APIs**. After every run, one
 email reports what happened on each marketplace.
 
@@ -56,6 +56,7 @@ flowchart LR
     R --> EG[emag_push.py] --> EGA[eMAG RO/BG/HU<br>Marketplace API]
     R --> FR[fruugo_push.py] --> FRA[Fruugo<br>CSV feed at a static URL]
     R --> CD[cdon_push.py] --> CDA[CDON SE/DK/FI/NO<br>merchant API]
+    R --> OB[onbuy_push.py] --> OBA[OnBuy UK + EU<br>API v2]
     R --> L[logs/ + report.txt]
     R -->|SMTP over TLS| G[Gmail] --> M[Report email]
 ```
@@ -63,7 +64,7 @@ flowchart LR
 The solution has three layers:
 
 1. **Input**: the scraper's products JSON, plus the run configuration.
-2. **Pushers**: twenty-five independent scripts, one per marketplace. Each turns the
+2. **Pushers**: twenty-six independent scripts, one per marketplace. Each turns the
    common product format into that marketplace's API calls.
 3. **Orchestration and reporting**: `push_all.py` runs the enabled pushers,
    works out each one's result, saves logs, and emails one report through
@@ -79,7 +80,7 @@ stored in the code, the repository, or the configuration.
 | Scraper (separate project) | Produces `books.json`: id, title, price, ISBN, condition, images, stock | Python |
 | `push_all_config.json` | Which pushers run, their options, products file, report recipients, timeouts | JSON, not in git |
 | **`push_all.py`** | Runs the pushers one after another, counts results, writes logs, sends the email, prevents overlapping runs | Python standard library only |
-| 25 pushers (`*_push.py`) | One per marketplace: validate products, match the catalog, create or update listings, record what was pushed | Python + `requests` (Vinted: standard library) |
+| 26 pushers (`*_push.py`) | One per marketplace: validate products, match the catalog, create or update listings, record what was pushed | Python + `requests` (Vinted: standard library) |
 | State files (`*_posted.json`) | Per marketplace, what has already been pushed, so re-runs don't duplicate | JSON, local, not in git |
 | Bitwarden Secrets Manager + `bws` | Stores all credentials and injects them as environment variables at start-up | Bitwarden cloud, `bws` 2.1.0 |
 | Gmail account | Sends the report (SMTP, port 465, TLS, App Password) | Gmail |
@@ -119,6 +120,7 @@ doesn't contain any marketplace logic.
 | eMAG (Romania, Bulgaria, Hungary) | eMAG Marketplace API (api-3, documentation v4.5.1) | API user + password (Basic auth); only from whitelisted IPs | Finds the existing eMAG product by EAN (`documentation/find_by_eans`), attaches the offer by part_number_key (`product_offer/save`, price without VAT, min/max price window); updates with the light `offer/save` | Official documentation (Word file from eMAG, v4.5.1) |
 | Fruugo (~40 countries) | Fruugo product feed (CSV), downloaded by Fruugo from a static URL | None for listing: write access to the web location (local folder or SFTP with a pinned host key) | One feed with every book (ISBN, title, description, publisher, price with VAT, stock); images copied next to it under short URLs; removed books stay `NOTAVAILABLE` for 30 days | Official, public (Fruugo Retailer Support wiki) |
 | CDON (Sweden, Denmark, Finland, Norway) | CDON merchant API (new platform, docs.cdon.com) | Merchant ID + API token (Basic auth) | Own article per book (`POST /v2/articles/bulk`: ISBN as GTIN, condition NEW, price per market incl. VAT); CDON processes it in the background, results from `/v1/statuses`; updates with `PUT /v2/articles/bulk` actions | Official, public (CDON API reference) |
+| OnBuy (UK + 20 European sites) | OnBuy / OnCommerce API v2 | Consumer key + secret key; 15-minute token, tied to the IP | Finds the existing OnBuy product by barcode (`GET /v2/products`), attaches the listing (`POST /v2/listings`, per-row results); price/stock with `PUT /v2/listings/by-sku`; one or several country sites per run | Official, public (Postman reference) |
 
 All pushers read the same input format and apply the same base rules: skip
 sold-out or incomplete products, map the condition, and convert ISBN-10 to
@@ -161,12 +163,12 @@ marketplace's rate limits, and one pusher failing doesn't stop the others.
   runner counts what was pushed.
 - **Updates:**
   - `--resend` re-sends price and stock (Casa del Libro, Fnac, AbeBooks, booklooker,
-    El Corte Inglés, Carrefour, Worten, IBS.it, Empik, E.Leclerc, Kaufland, bol.com, Cdiscount, Allegro, AliExpress, Temu, TikTok Shop, OTTO Market, eMAG, CDON; Galaxus and Fruugo re-send their whole feed when anything changed). Vinted, eBay and Amazon only
+    El Corte Inglés, Carrefour, Worten, IBS.it, Empik, E.Leclerc, Kaufland, bol.com, Cdiscount, Allegro, AliExpress, Temu, TikTok Shop, OTTO Market, eMAG, CDON, OnBuy; Galaxus and Fruugo re-send their whole feed when anything changed). Vinted, eBay and Amazon only
     create listings so far; their APIs support updates (see
     [capabilities.md](capabilities.md)).
   - AbeBooks can also delete listings for books that are now sold out, and
     Kaufland, bol.com and Cdiscount can set their stock to 0 (`--zero-sold-out`), Allegro can end the offer (`--end-sold-out`), and AliExpress, Temu
-    and TikTok Shop can take them offline (`--offline-sold-out`). OTTO Market and eMAG can do both (`--zero-sold-out`, `--offline-sold-out`). Galaxus keeps sold-out books with stock 0, or leaves them out of the feed (`--drop-sold-out`). Fruugo marks them `OUTOFSTOCK`, or `NOTAVAILABLE` with `--drop-sold-out`. CDON can set stock 0, pause or delete them (`--zero-sold-out`, `--pause-sold-out`, `--delete-sold-out`).
+    and TikTok Shop can take them offline (`--offline-sold-out`). OTTO Market and eMAG can do both (`--zero-sold-out`, `--offline-sold-out`). Galaxus keeps sold-out books with stock 0, or leaves them out of the feed (`--drop-sold-out`). Fruugo marks them `OUTOFSTOCK`, or `NOTAVAILABLE` with `--drop-sold-out`. CDON can set stock 0, pause or delete them (`--zero-sold-out`, `--pause-sold-out`, `--delete-sold-out`). OnBuy can set stock 0 or delete them (`--zero-sold-out`, `--delete-sold-out`).
 - **Output files:**
   - logs per run
   - the last generated offer file per marketplace (CSV/XML), so you can check
@@ -202,7 +204,7 @@ The full setup steps are in
 |---|---|
 | One product is invalid | Skipped with its reason; the others continue |
 | A marketplace rejects one offer | Shown in the report with the marketplace's message; not recorded, so it's retried next run |
-| Temporary API error (429/5xx, AbeBooks 1xx) | Retried automatically with backoff by the Amazon, Casa del Libro, Fnac, AbeBooks, El Corte Inglés, Carrefour, Worten, IBS.it, Empik, E.Leclerc, Kaufland, bol.com, Cdiscount, Allegro, AliExpress, Temu, TikTok Shop, OTTO Market, eMAG and CDON pushers (Galaxus and Fruugo: the upload is retried). Vinted and eBay report the error, and the item is retried on the next run. |
+| Temporary API error (429/5xx, AbeBooks 1xx) | Retried automatically with backoff by the Amazon, Casa del Libro, Fnac, AbeBooks, El Corte Inglés, Carrefour, Worten, IBS.it, Empik, E.Leclerc, Kaufland, bol.com, Cdiscount, Allegro, AliExpress, Temu, TikTok Shop, OTTO Market, eMAG, CDON and OnBuy pushers (Galaxus and Fruugo: the upload is retried). Vinted and eBay report the error, and the item is retried on the next run. |
 | Wrong credentials or a pusher crash | That pusher is `FAILED`, with its last output lines in the email; the others still run |
 | A pusher hangs | Killed after `timeout_minutes`, reported as `FAILED` |
 | Two runs overlap | The second one stops (lock file) |
@@ -241,8 +243,9 @@ credentials, and doesn't contact any real API:
 | `test_emag.py` | eMAG Marketplace API (Basic auth, data envelope, find_by_eans, VAT, attach by PNK, price window, batch errors, light offer/save, read with pagination) | 23 |
 | `test_fruugo.py` | Retailer side of the Fruugo feed (local web server for images and feed, SFTP via paramiko with pinned host key) and the documented CSV rules | 36 |
 | `test_cdon.py` | CDON merchant API (Basic auth, bulk create/update with limits, market currencies, asynchronous batch and SKU statuses, sku_already_exists, categories, 429) | 26 |
+| `test_onbuy.py` | OnBuy API v2 (token renewal, barcode search in 50s, batch listings with per-row errors, by-sku update/delete, several sites, check-winning, 429) | 21 |
 | `test_push_all.py` | Fake pushers + fake mail server | 24 |
-| **Total** | | **578, all passing** |
+| **Total** | | **599, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.
@@ -251,7 +254,7 @@ fields, limits, error codes, and asynchronous processing.
 
 | Part | Status |
 |---|---|
-| All 25 pushers | Built and passing their tests. **Not yet run against the real marketplaces**, because there are no seller accounts or API credentials yet. |
+| All 26 pushers | Built and passing their tests. **Not yet run against the real marketplaces**, because there are no seller accounts or API credentials yet. |
 | Runner + email report | Built and tested. **Verified for real on 2026-11-05**: credentials from Bitwarden, test email and dry-run report delivered through Gmail. |
 | Bitwarden Secrets Manager | Set up and working (project, machine account, token, `bws` 2.1.0). |
 | Server | Not yet deployed. The commands and steps are documented. |
