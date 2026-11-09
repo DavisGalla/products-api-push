@@ -405,13 +405,16 @@ def cmd_push(api, a):
         new = new[: a.limit]
 
     if new and not a.category:
-        sys.exit("CATEGORY is not set: find the books category with `categories --find Buch` and set it "
-                 "(or pass --category).")
+        if not a.dry_run:
+            sys.exit("CATEGORY is not set: find the books category with `categories --find Buch` and set it "
+                     "(or pass --category).")
+        a.category = "<CATEGORY not set>"
+        print("   (dry run: CATEGORY not set yet - placeholder used; a real push needs it)")
     if new and gpsr_missing():
         msg = "GPSR_DISTRIBUTOR is incomplete (missing " + ", ".join(gpsr_missing()) + "): OTTO requires it."
         if not a.dry_run:
             sys.exit(msg)
-        print("   ! " + msg)
+        print(f"   (dry run: {msg[:-1]}; a real push needs it)")
 
     brands = {}
     if api and new and MATCH_PUBLISHER_BRAND:

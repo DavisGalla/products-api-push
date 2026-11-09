@@ -62,6 +62,10 @@ otto_brands.json
 emag_posted.json
 emag_ids.json
 emag_offers.json
+fruugo_posted.json
+fruugo_publish.json
+fruugo_feed.csv
+fruugo_images/
 
 # push_all runner (local config, credentials, logs)
 push_all_config.json

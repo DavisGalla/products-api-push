@@ -116,6 +116,9 @@ PUSHERS = {
     "emag": dict(label="eMAG", script="emag_push.py", sub=True, yes=True,
                  state="emag_posted.json", dry=["--dry-run"],
                  env=["EMAG_USERNAME", "EMAG_PASSWORD"]),
+    "fruugo": dict(label="Fruugo", script="fruugo_push.py", sub=True, yes=True,
+                   state="fruugo_posted.json", dry=["--dry-run"],
+                   env=["FRUUGO_FEED_URL"]),
 }
 
 RE_SKIP = re.compile(r"\bSKIP\b")
@@ -209,7 +212,7 @@ def run_pusher(name, spec, settings, cfg, a, log_dir):
            "problems": [], "tail": [], "exit_code": None, "seconds": 0, "log": None}
     missing = [k for k in required_env(name, spec, settings) if not os.environ.get(k)]
     # dry runs of these pushers build their files without credentials
-    if missing and not (a.dry_run and name in ("fnac", "abebooks", "ebay", "kaufland", "galaxus", "otto", "emag")):
+    if missing and not (a.dry_run and name in ("fnac", "abebooks", "ebay", "kaufland", "galaxus", "otto", "emag", "fruugo")):
         res.update(status="NOT CONFIGURED", note="missing " + ", ".join(missing))
         return res
 

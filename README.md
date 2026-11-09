@@ -27,6 +27,7 @@ Push a JSON file of products to marketplaces through their official APIs:
 | `galaxus_push.py` | Galaxus Switzerland / Germany (StockPricingData feed over SFTP) | SFTP user + password from the Galaxus onboarding | [docs/galaxus_push.md](docs/galaxus_push.md) |
 | `otto_push.py` | OTTO Market, Germany (OTTO Market API: Products v5, Availability v1) | client ID + secret of an OTTO Partner Connect self-app | [docs/otto_push.md](docs/otto_push.md) |
 | `emag_push.py` | eMAG Romania, Bulgaria, Hungary (eMAG Marketplace API v4.5) | API user + password, whitelisted IP | [docs/emag_push.md](docs/emag_push.md) |
+| `fruugo_push.py` | Fruugo, ~40 countries (CSV product feed at a static URL) | A web location Fruugo can download from (local web folder or SFTP to your host) | [docs/fruugo_push.md](docs/fruugo_push.md) |
 
 **`push_all.py`** runs all the enabled pushers in one go and emails one report
 from Gmail ("Vinted 5 pushed, Amazon 1 rejected, Fnac failed ..."). See
@@ -544,6 +545,23 @@ python emag_push.py push --limit 1            # one real offer
 python emag_push.py status                    # for sale? price valid? buy button rank
 ```
 
+## Fruugo quick start
+
+Fruugo has no listing API. You publish a product feed (CSV) at a fixed URL,
+and Fruugo downloads it every time it changes. The script builds the feed
+from books.json (ISBN, title, description, publisher, price with VAT, stock),
+copies the images next to it (Fruugo allows only short image URLs), and
+writes both to a folder your web server serves, or uploads them to your web
+host over SFTP. Tell Fruugo's integration team the feed URL. Set `CATEGORY`
+(the Fruugo category path) at the top of the script first.
+
+```powershell
+python fruugo_push.py check                   # settings, target folder, feed URL
+python fruugo_push.py push --dry-run          # writes fruugo_feed.csv, publishes nothing
+python fruugo_push.py push                    # publishes images + feed (only when it changed)
+python fruugo_push.py status                  # does the URL serve the last feed?
+```
+
 ---
 
 ## Run everything and get an email report
@@ -568,7 +586,7 @@ the Gmail App Password, a `.env` alternative, and scheduling on a server.
 
 ## First run with real credentials
 
-All twenty-three scripts have only been tested against local mocks of the APIs. Before you
+All twenty-four scripts have only been tested against local mocks of the APIs. Before you
 push your whole catalogue, try one item at a time:
 
 - **Vinted:**
@@ -662,6 +680,10 @@ push your whole catalogue, try one item at a time:
   1. `check` logs in (from a whitelisted IP) and finds the books VAT rate.
   2. `lookup <isbn>` shows whether eMAG knows the book and whether you may sell in its category.
   3. `push --limit 1`, then `status` until it shows `FOR SALE`.
+- **Fruugo:**
+  1. `check` shows the settings, a writable target folder and the feed URL.
+  2. `push --dry-run` builds `fruugo_feed.csv`. Look through it.
+  3. `push --limit 1`, send the feed URL to Fruugo, then check the Retailer Portal for feed errors.
 
 ## Tests
 
@@ -689,6 +711,7 @@ python tests\test_tiktok.py
 python tests\test_galaxus.py
 python tests\test_otto.py
 python tests\test_emag.py
+python tests\test_fruugo.py
 python tests\test_push_all.py
 ```
 
@@ -697,4 +720,5 @@ Each pusher test starts a fake API on `127.0.0.1:8765` and runs the script again
 credentials, and nothing is sent to any marketplace. `test_push_all.py` uses
 fake pushers and a fake mail server on `127.0.0.1:8766`.
 `test_galaxus.py` instead runs a local SFTP server on a free port and needs
-`pip install paramiko`.
+`pip install paramiko`. `test_fruugo.py` runs a local web server and SFTP server on free
+ports (its SFTP part also needs paramiko).

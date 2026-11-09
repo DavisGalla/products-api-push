@@ -59,7 +59,8 @@ push_all.py ── push_all_config.json (what to run)
         ├─► tiktok_push.py push …        │
         ├─► galaxus_push.py push …       │
         ├─► otto_push.py push …          │
-        └─► emag_push.py push …          ─┘
+        ├─► emag_push.py push …          │
+        └─► fruugo_push.py push …        ─┘
         │
         ├─► logs/<date_time>/<pusher>.log + report.txt
         └─► Gmail (SMTP) ─► report email
@@ -109,7 +110,8 @@ One pusher failing doesn't stop the others.
     "tiktok":        {"enabled": false, "args": []},
     "galaxus":       {"enabled": false, "args": []},
     "otto":          {"enabled": false, "args": []},
-    "emag":          {"enabled": false, "args": []}
+    "emag":          {"enabled": false, "args": []},
+    "fruugo":        {"enabled": false, "args": []}
   }
 }
 ```

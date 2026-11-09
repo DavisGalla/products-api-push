@@ -1,2 +1,2 @@
 requests>=2.28
-paramiko>=3.2   # galaxus_push.py only (SFTP upload)
+paramiko>=3.2   # galaxus_push.py, and fruugo_push.py in SFTP mode (upload)
