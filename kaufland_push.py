@@ -6,8 +6,10 @@ official Kaufland Seller API v2 (https://sellerapi.kaufland.com).
 Each product is matched to an EXISTING Kaufland catalog product by its
 ISBN/EAN, and your offer (a "unit": price, stock, condition, handling time)
 is created on the chosen storefront. Books not in Kaufland's catalog are
-skipped. One Kaufland seller account covers every storefront (es, de, fr,
-it, ...); this script defaults to Spain.
+skipped. One Kaufland seller account covers every storefront (es, de, at,
+fr, it, nl, sk, cz, pl); this script defaults to Spain, and --storefronts
+serves several in one run (each gets its own offers; prices are converted to
+CZK / PLN for kaufland.cz / kaufland.pl).
 
 ONE-TIME SETUP (see docs/kaufland_push.md)
   Kaufland Seller Portal -> Settings -> API (sellerportal.kaufland.de/settings/api):
@@ -25,6 +27,8 @@ USAGE
     python kaufland_push.py push                   # everything
     python kaufland_push.py push --resend --zero-sold-out   # sync price/stock, stock 0 for sold-out
     python kaufland_push.py status                 # what's live (and why not)
+    python kaufland_push.py push --storefronts es,de,fr    # several storefronts in one run
+    python kaufland_push.py push --storefronts all         # all 9 (or: eur = the 7 euro ones)
 
 NOTE: new books in Spain have a legally fixed price (Ley 10/2007, max 5%
 discount). Don't use --price-factor to sell above the cover price.
@@ -47,6 +51,10 @@ import requests
 JSON_FILE = r"C:\programming\scraper\books.json"
 
 STOREFRONT = "es"            # kaufland.es. Others: de, at, cz, sk, pl, fr, it, nl (see `check`)
+ALL_STOREFRONTS = ["es", "de", "at", "fr", "it", "nl", "sk", "cz", "pl"]
+STOREFRONT_CURRENCY = {"cz": "CZK", "pl": "PLN"}   # all others: EUR
+# Source prices are EUR. Rates for kaufland.cz / kaufland.pl; update them regularly.
+EUR_RATE = {"EUR": "1", "CZK": "25.0", "PLN": "4.25"}
 
 # Source condition -> Kaufland unit condition.
 CONDITION_MAP = {
@@ -66,6 +74,8 @@ STATE_FILE = Path("kaufland_posted.json")
 PREVIEW_FILE = Path("kaufland_units.json")
 USER_AGENT = "Inhouse_development"
 MAX_NOTE = 250
+PREVIEW_ROWS = []
+SKIPS_SHOWN = set()
 
 
 # --------------------------------------------------------------------------- API
@@ -206,9 +216,13 @@ def problems_of(p):
     return probs
 
 
-def to_cents(price, factor=1.0):
-    """Price in EUR -> integral cents, rounded half-up (8.075 -> 808), without float errors."""
-    value = Decimal(str(price)) * Decimal(str(factor)) * 100
+def currency_of(storefront):
+    return STOREFRONT_CURRENCY.get(storefront.lower(), "EUR")
+
+
+def to_cents(price, factor=1.0, currency="EUR"):
+    """Price in EUR -> integral cents of the storefront currency, rounded half-up (8.075 -> 808)."""
+    value = Decimal(str(price)) * Decimal(str(factor)) * Decimal(EUR_RATE[currency]) * 100
     return int(value.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 
@@ -217,7 +231,7 @@ def unit_body(p, a, amount=None):
         "ean": p["ean"],
         "id_offer": p["sku"],
         "condition": CONDITION_MAP[p["condition"]],
-        "listing_price": to_cents(p["price"], a.price_factor),   # integral cents
+        "listing_price": to_cents(p["price"], a.price_factor, currency_of(a.storefront)),   # integral cents
         "amount": min(int(amount if amount is not None else (p["quantity"] or a.quantity)), 99999),
         "handling_time": a.handling_days,
         "storefront": a.storefront,
@@ -263,7 +277,9 @@ def cmd_push(api, a):
             continue
         probs = problems_of(p)
         if probs:
-            print(f"[{i}] SKIP '{p['title']}': " + "; ".join(probs))
+            if i not in SKIPS_SHOWN:                 # report a bad book once, not once per storefront
+                SKIPS_SHOWN.add(i)
+                print(f"[{i}] SKIP '{p['title']}': " + "; ".join(probs))
             continue
         if key(p) in state and not a.resend:
             print(f"[{i}] already pushed: {p['title']}")
@@ -291,7 +307,8 @@ def cmd_push(api, a):
     print(f"{len(todo)} offer(s) to push" + (f", {len(zero)} sold-out offer(s) to set to stock 0" if zero else "") + ".")
     if not bodies:
         return
-    PREVIEW_FILE.write_text(json.dumps(bodies, ensure_ascii=False, indent=2), encoding="utf-8")
+    PREVIEW_ROWS.extend(bodies)                  # one preview file for all storefronts of this run
+    PREVIEW_FILE.write_text(json.dumps(PREVIEW_ROWS, ensure_ascii=False, indent=2), encoding="utf-8")
     if a.dry_run:
         print(f"Dry run: offers written to {PREVIEW_FILE.resolve()} - nothing sent.")
         return
@@ -307,7 +324,7 @@ def cmd_push(api, a):
             state[key(p)] = {"ean": p["ean"], "id_unit": unit.get("id_unit"), "listing_price": body["listing_price"],
                              "amount": body["amount"], "pushed_at": time.strftime("%Y-%m-%d %H:%M:%S")}
             save_state(state)
-            print(f"   + {p['sku']}: {body['listing_price'] / 100:.2f} EUR x{body['amount']}"
+            print(f"   + {p['sku']}: {body['listing_price'] / 100:.2f} {currency_of(a.storefront)} x{body['amount']}"
                   + (f" -> unit {unit.get('id_unit')}" if unit.get("id_unit") else ""))
             ok += 1
         else:
@@ -343,7 +360,8 @@ def cmd_status(api, a):
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     common = argparse.ArgumentParser(add_help=False)
-    common.add_argument("--storefront", default=STOREFRONT, help=f"default: {STOREFRONT}")
+    common.add_argument("--storefront", default=STOREFRONT, help=f"one storefront (default: {STOREFRONT})")
+    common.add_argument("--storefronts", help="several, comma separated (es,de,fr), or 'eur' / 'all'")
     ap = argparse.ArgumentParser(description="Push offers to Kaufland (Seller API v2)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("check", parents=[common], help="test the keys and list storefronts")
@@ -363,12 +381,31 @@ def main():
     p.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     sub.add_parser("status", parents=[common], help="list your offers and whether they are live")
     a = ap.parse_args()
-    a.storefront = a.storefront.lower()
-    if a.cmd == "push" and a.dry_run and not all(os.environ.get(k) for k in ("KAUFLAND_CLIENT_KEY", "KAUFLAND_SECRET_KEY")):
-        cmd_push(None, a)                        # no credentials needed to build the preview
-        return
-    api = Kaufland()
-    {"check": cmd_check, "push": cmd_push, "status": cmd_status}[a.cmd](api, a)
+    fronts = parse_storefronts(a)
+    no_keys = not all(os.environ.get(k) for k in ("KAUFLAND_CLIENT_KEY", "KAUFLAND_SECRET_KEY"))
+    api = None if (a.cmd == "push" and a.dry_run and no_keys) else Kaufland()   # dry run needs no keys
+    for sf in fronts:
+        a.storefront = sf
+        if len(fronts) > 1:
+            print(f"--- kaufland.{sf} ({currency_of(sf)}) ---")
+        {"check": cmd_check, "push": cmd_push, "status": cmd_status}[a.cmd](api, a)
+
+
+def parse_storefronts(a):
+    if a.storefronts:
+        v = a.storefronts.strip().lower()
+        if v == "all":
+            fronts = list(ALL_STOREFRONTS)
+        elif v == "eur":
+            fronts = [s for s in ALL_STOREFRONTS if currency_of(s) == "EUR"]
+        else:
+            fronts = [s.strip().lower() for s in v.split(",") if s.strip()]
+        bad = [s for s in fronts if s not in ALL_STOREFRONTS]
+        if bad or not fronts:
+            sys.exit(f"Unknown Kaufland storefront(s): {', '.join(bad) or '(none)'}. "
+                     f"Known: {', '.join(ALL_STOREFRONTS)}, or 'eur' / 'all'.")
+        return list(dict.fromkeys(fronts))
+    return [a.storefront.lower()]
 
 
 if __name__ == "__main__":

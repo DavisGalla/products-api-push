@@ -7,7 +7,10 @@ behaves today.
 
 Kaufland opened its Spanish storefront to sellers in June 2026. One Kaufland
 seller account covers every storefront: es, de, at, cz, sk, pl, fr, it and nl.
-The script defaults to Spain (`es`), and `--storefront` selects another one.
+The script defaults to Spain (`es`). `--storefront` selects another one, and
+`--storefronts` serves several in one run: a list (`es,de,fr`), `eur` (the 7
+euro storefronts) or `all` (all 9). Each storefront gets its own offers. Prices
+are converted from EUR to CZK for kaufland.cz and to PLN for kaufland.pl.
 
 - [How it works](#how-it-works)
 - [Setup](#setup)
@@ -52,7 +55,8 @@ scraped text and photos aren't sent.
 **Requirements:** Python 3.8 or newer, and `requests` (`pip install -r requirements.txt`).
 
 **1. Seller account.** Register at the Kaufland Global Marketplace seller
-portal, and activate the Spanish storefront.
+portal, and activate the Spanish storefront (and every other storefront
+you want to sell on, each with its shipping group and warehouse).
 
 **2. Shipping and warehouse.** In the Seller Portal, set up a **shipping group**
 and a **default warehouse** for Spain. Without a default warehouse, Kaufland
@@ -80,7 +84,8 @@ signatures with an older or newer timestamp.
 | Setting | Purpose |
 |---|---|
 | `JSON_FILE` | Products file used when `push` gets no path. |
-| `STOREFRONT` | `es` (kaufland.es). `--storefront` overrides it. |
+| `STOREFRONT` | `es` (kaufland.es). `--storefront` / `--storefronts` override it. |
+| `EUR_RATE` | CZK 25.0, PLN 4.25: EUR → storefront currency for kaufland.cz and kaufland.pl. **Update regularly.** |
 | `CONDITION_MAP` | Your condition mapped to the Kaufland condition (see below). |
 | `DEFAULT_HANDLING_DAYS` | Working days until you ship (`3`). |
 | `SHIPPING_GROUP_ID`, `WAREHOUSE_ID` | Optional. Leave them empty to use your defaults from the Seller Portal. |
@@ -113,6 +118,7 @@ python kaufland_push.py push [json_file] [options]
 |---|---|---|
 | `json_file` | `JSON_FILE` setting | Products file. |
 | `--storefront` | `es` | Kaufland country storefront. |
+| `--storefronts` | – | Several storefronts in one run: `es,de,fr`, or `eur` / `all`. Works for `check`, `push` and `status`. The dry-run preview `kaufland_units.json` then holds the offers of all of them. |
 | `--quantity` | `1` | Stock per offer (at most 99999). A product's own `quantity` takes precedence. |
 | `--handling-days` | `3` | Working days until you ship. |
 | `--price-factor` | `1.0` | Multiplies every source price. See the [fixed book price](#limitations). |
@@ -195,6 +201,10 @@ Kaufland's errors have a `type`, a `message`, and sometimes field-level
 
 ## Limitations
 
+- **The same copy on several storefronts:** each storefront gets its own
+  offer. With one copy, it can sell twice until stock is synced.
+- **Exchange rates** for CZK and PLN are fixed in `EUR_RATE`, not fetched live.
+
 - **Offers only.** The script can't create new products in Kaufland's catalog,
   which would need the product data import.
 - **Spanish fixed book price.** New books have a price fixed by law
@@ -240,6 +250,8 @@ It returns a 429 once, to test the retry. The test checks the following:
 - `status` shows reasons for units that aren't live
 - server and validation errors are shown, and rejected units aren't recorded
 - a second storefront is tracked separately
+- `--storefronts`: several storefronts in one run, CZK / PLN conversion,
+  nothing sent twice, unknown storefronts refused, `eur` in a dry run
 
 Your real `kaufland_posted.json` is never touched, because the test runs in a
 temporary folder.

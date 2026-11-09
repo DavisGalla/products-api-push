@@ -284,6 +284,30 @@ def test_kaufland():
         check("--storefront de pushes to another country separately", "DE:T-NEW" in state
               and any(u["storefront"] == "DE" for u in S.units.values()), str(state))
 
+        posts = S.posts
+        rc, out = run(["push", pf, "--yes", "--storefronts", "es,fr,cz,pl"], tmp, ENV)
+        state = json.loads((Path(tmp) / "kaufland_posted.json").read_text())
+        unit = lambda sf, sku: next((u for u in S.units.values() if u["storefront"] == sf and u["id_offer"] == sku), {})
+        check("--storefronts: FR, CZ and PL listed in one run, ES not sent again",
+              rc == 0 and {"FR:T-NEW", "CZ:T-NEW", "PL:T-NEW", "FR:T-USED"} <= set(state)
+              and "--- kaufland.cz (CZK) ---" in out and not any(k.startswith("ES:") and v.get("pushed_at") is None
+                                                                for k, v in state.items()), out[-400:])
+        check("kaufland.cz price converted to CZK, kaufland.pl to PLN, kaufland.fr stays EUR",
+              unit("CZ", "T-NEW").get("listing_price") == 21250 and unit("PL", "T-NEW").get("listing_price") == 3613
+              and unit("FR", "T-NEW").get("listing_price") == 850,
+              f'{unit("CZ", "T-NEW").get("listing_price")} {unit("PL", "T-NEW").get("listing_price")} {unit("FR", "T-NEW").get("listing_price")}')
+        rc, out = run(["push", pf, "--yes", "--storefronts", "es,fr,cz,pl"], tmp, ENV)
+        check("--storefronts re-run sends nothing new", "offer(s) to push" in out and S.posts == posts + 6, out[-300:])
+        rc, out = run(["push", pf, "--yes", "--storefronts", "xx"], tmp, ENV)
+        check("unknown storefront in --storefronts refused", rc != 0 and "Unknown Kaufland storefront" in out, out[-200:])
+
+    with tempfile.TemporaryDirectory() as tmp:
+        rc, out = run(["push", pf, "--dry-run", "--storefronts", "eur"], tmp, {})
+        prev = json.loads((Path(tmp) / "kaufland_units.json").read_text(encoding="utf-8"))
+        check("--storefronts eur: one preview with the 7 euro storefronts (dry run, no keys)",
+              rc == 0 and sorted({u["storefront"] for u in prev}) == ["at", "de", "es", "fr", "it", "nl", "sk"],
+              str(sorted({u["storefront"] for u in prev})))
+
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")

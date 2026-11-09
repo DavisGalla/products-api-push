@@ -108,7 +108,7 @@ doesn't contain any marketplace logic.
 | IBS.it (Italy) | Mirakl seller API | API key | Same flow as Casa del Libro | Mirakl standard; IBS doesn't publish its own documentation |
 | E.Leclerc (France) | Mirakl seller API | API key | Same flow as Casa del Libro | Mirakl standard; E.Leclerc doesn't publish its own documentation |
 | Empik (Poland) | Mirakl seller API | API key | Same flow as Casa del Libro; EUR prices converted to PLN (`EUR_TO_PLN`) | Mirakl standard; Empik doesn't publish its own documentation |
-| Kaufland.es (other storefronts optional) | Kaufland Seller API v2 | Client key + secret key; every request is HMAC-SHA256 signed | Checks the catalog by EAN, then creates a unit (offer) per book; `id_offer` makes re-sends update it | Official, public |
+| Kaufland (9 storefronts: es, de, at, fr, it, nl, sk, cz, pl) | Kaufland Seller API v2 | Client key + secret key; every request is HMAC-SHA256 signed | Checks the catalog by EAN, then creates a unit (offer) per book; `id_offer` makes re-sends update it; one or several storefronts per run (`--storefronts`; CZK/PLN converted) | Official, public |
 | bol.com (Netherlands + Belgium) | bol.com Retailer API, Offers API v11 | Client ID + secret → short-lived token (client credentials) | Checks the catalog by EAN, then creates an offer per book (new or used); economic operator for GPSR | Official, public |
 | Cdiscount (France) | Octopia Seller API (`/seller/v2`) | Client ID + secret → 2-hour token, plus Seller ID | Checks the catalog by EAN, then sends offers (new or used) in an Upsert offer package and reads each offer's result | Official, public |
 | Allegro (Poland) | Allegro REST API | Client ID + secret, one-time device-code authorization (12 h token, single-use refresh token, max 3 months) | Offer on the catalog product by EAN (new or used), PLN price, account shipping/after-sales settings and GPSR producer | Official, public (OpenAPI) |
@@ -231,7 +231,7 @@ credentials, and doesn't contact any real API:
 | `test_ibs.py` | Mirakl API | 21 |
 | `test_empik.py` | Mirakl API (with PLN conversion) | 22 |
 | `test_leclerc.py` | Mirakl API | 21 |
-| `test_kaufland.py` | Kaufland Seller API (including HMAC signature verification) | 22 |
+| `test_kaufland.py` | Kaufland Seller API (including HMAC signature verification; several storefronts per run, CZK/PLN conversion) | 27 |
 | `test_bol.py` | bol.com Retailer API, Offers v11 (token login, media types, catalog check, 409 linking, reasons) | 21 |
 | `test_cdiscount.py` | Octopia Seller API (token, SellerId, catalog check, offer packages, paginated results) | 21 |
 | `test_allegro.py` | Allegro REST API (device flow, rotating refresh token, catalog by GTIN, 201/202 creation, end/activate) | 22 |
@@ -245,7 +245,7 @@ credentials, and doesn't contact any real API:
 | `test_cdon.py` | CDON merchant API (Basic auth, bulk create/update with limits, market currencies, asynchronous batch and SKU statuses, sku_already_exists, categories, 429) | 26 |
 | `test_onbuy.py` | OnBuy API v2 (token renewal, barcode search in 50s, batch listings with per-row errors, by-sku update/delete, several sites, check-winning, 429) | 21 |
 | `test_push_all.py` | Fake pushers + fake mail server | 24 |
-| **Total** | | **599, all passing** |
+| **Total** | | **604, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.

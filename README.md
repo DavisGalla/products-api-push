@@ -363,6 +363,7 @@ python kaufland_push.py check            # keys work, storefront es available?
 python kaufland_push.py push --dry-run   # writes kaufland_units.json, sends nothing
 python kaufland_push.py push --limit 1   # one real offer
 python kaufland_push.py status           # LIVE? if not, Kaufland's reasons
+python kaufland_push.py push --storefronts all   # all 9 storefronts (CZ/PL prices converted)
 ```
 
 ---

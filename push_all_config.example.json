@@ -19,7 +19,7 @@
     "ibs":           {"enabled": false, "args": []},
     "empik":         {"enabled": false, "args": []},
     "leclerc":       {"enabled": false, "args": []},
-    "kaufland":      {"enabled": false, "args": ["--storefront", "es"]},
+    "kaufland":      {"enabled": false, "args": ["--storefronts", "all"]},
     "bol":           {"enabled": false, "args": ["--countries", "NL,BE"]},
     "cdiscount":     {"enabled": false, "args": []},
     "allegro":       {"enabled": false, "args": []},
