@@ -217,7 +217,7 @@ def build_csv(rows, a):
             "description": "",
             "internal-description": p["title"][:255],
             "price": money(p["price"], a.price_factor),
-            "quantity": int(p["quantity"] or a.quantity),
+            "quantity": 0 if p.get("zero") else int(p["quantity"] or a.quantity),
             "state": STATE_CODES[p["condition"]],
             "leadtime-to-ship": a.leadtime,
             "logistic-class": a.logistic_class or "",
@@ -267,20 +267,26 @@ def cmd_push(api, a):
         raw = raw.get("products", [])
     state = load_state()
 
-    todo = []
+    todo, zero = [], []
     for i, r in enumerate(raw, 1):
         p = normalize(r)
+        known = state.get(p["sku"])
+        if a.zero_sold_out and p["sold_out"] and known is not None:
+            if known.get("quantity") != 0 and p["price"] and p["ean"]:
+                zero.append(dict(p, zero=True))      # pushed before, now sold out -> stock 0
+            continue
         probs = problems_of(p)
         if probs:
             print(f"[{i}] SKIP '{p['title']}': " + "; ".join(probs))
             continue
-        if p["sku"] in state and not a.resend:
+        restock = a.zero_sold_out and known is not None and known.get("quantity") == 0
+        if p["sku"] in state and not a.resend and not restock:
             print(f"[{i}] already pushed: {p['title']}")
             continue
         todo.append(p)
     if a.limit:
         todo = todo[: a.limit]
-    if not todo:
+    if not todo and not zero:
         print("0 offer(s) to push.")
         return
 
@@ -290,10 +296,11 @@ def cmd_push(api, a):
         for p in [p for p in todo if p["ean"] not in found]:
             print(f"   SKIP '{p['title']}': EAN {p['ean']} is not in the E.Leclerc catalog")
         todo = [p for p in todo if p["ean"] in found]
-    print(f"{len(todo)} offer(s) to push.")
-    if not todo:
+    print(f"{len(todo)} offer(s) to push" + (f", {len(zero)} sold-out offer(s) to set to stock 0" if zero else "") + ".")
+    if not todo and not zero:
         return
 
+    todo += zero
     csv_bytes = build_csv(todo, a)
     CSV_FILE.write_bytes(csv_bytes)
     if a.dry_run:
@@ -330,7 +337,8 @@ def cmd_push(api, a):
     now = time.strftime("%Y-%m-%d %H:%M:%S")
     for p in todo:
         if p["sku"] not in errors:
-            state[p["sku"]] = {"ean": p["ean"], "import_id": import_id, "pushed_at": now}
+            state[p["sku"]] = {"ean": p["ean"], "import_id": import_id, "pushed_at": now,
+                               "quantity": 0 if p.get("zero") else int(p["quantity"] or a.quantity)}
     save_state(state)
     print(f"Recorded {len(todo) - len(errors)} offer(s). Run `status` to see them live.")
 
@@ -364,6 +372,8 @@ def main():
     p.add_argument("--logistic-class", help="logistic class code, if your shop requires one")
     p.add_argument("--price-factor", type=float, default=1.0, help="multiply source prices")
     p.add_argument("--resend", action="store_true", help="also re-send already pushed offers (price/stock sync)")
+    p.add_argument("--zero-sold-out", action="store_true",
+                   help="stock 0 for pushed offers now sold out; restore stock when they are back")
     p.add_argument("--no-match-check", action="store_true", help="skip the catalog lookup before uploading")
     p.add_argument("--dry-run", action="store_true", help="write the offer CSV, upload nothing")
     p.add_argument("--limit", type=int, default=0, help="max offers this run (0 = all)")

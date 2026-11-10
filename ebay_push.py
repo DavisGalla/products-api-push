@@ -257,9 +257,59 @@ def push_one(eb, p, a, ctx):
     else:
         offer_id = eb.call("POST", "/sell/inventory/v1/offer", offer)["offerId"]
     if a.no_publish:
-        return {"offerId": offer_id, "published": False}
+        return {"offerId": offer_id, "published": False, "quantity": a.quantity}
     res = eb.call("POST", f"/sell/inventory/v1/offer/{offer_id}/publish")
-    return {"offerId": offer_id, "listingId": res.get("listingId"), "published": True}
+    return {"offerId": offer_id, "listingId": res.get("listingId"), "published": True, "quantity": a.quantity}
+
+
+def sold_out_updates(raw, state, markets, quantity):
+    """Stock changes for books already listed: sold out -> 0, back in stock -> quantity.
+    Returns {sku: (new_quantity, [(state_key, offerId), ...])}."""
+    out = {}
+    for r in raw:
+        p = normalize(r)
+        if not p["sku"]:
+            continue
+        for market in markets:
+            key = f"{market}:{p['sku']}"
+            e = state.get(key)
+            if not e or not e.get("offerId"):
+                continue
+            current = e.get("quantity", quantity)
+            want = 0 if p["sold_out"] else (current if current else quantity)
+            if want != current:
+                out.setdefault(p["sku"], (want, []))[1].append((key, e["offerId"]))
+    return out
+
+
+def apply_stock_updates(eb, updates, state):
+    """POST bulk_update_price_quantity, 25 SKUs per call; records the new quantity per site."""
+    items = list(updates.items())
+    done = 0
+    for i in range(0, len(items), 25):
+        part = items[i:i + 25]
+        body = {"requests": [{"sku": sku, "shipToLocationAvailability": {"quantity": q},
+                              "offers": [{"offerId": oid, "availableQuantity": q} for _, oid in offers]}
+                             for sku, (q, offers) in part]}
+        try:
+            res = eb.call("POST", "/sell/inventory/v1/bulk_update_price_quantity", body, ok=(200, 207))
+        except RuntimeError as e:
+            print(f"   ! stock update failed: {e}")
+            continue
+        failed = {}
+        for r in res.get("responses") or []:
+            if r.get("statusCode") not in (200, None) or r.get("errors"):
+                failed[(r.get("sku"), r.get("offerId"))] = "; ".join(x.get("message", "") for x in r.get("errors") or [])
+        for sku, (q, offers) in part:
+            for key, oid in offers:
+                if (sku, oid) in failed or (sku, None) in failed:
+                    print(f"   ! {key}: stock update rejected: {failed.get((sku, oid)) or failed.get((sku, None))}")
+                    continue
+                state[key]["quantity"] = q
+                done += 1
+                print(f"   {key}: stock {q}" + ("  (sold out)" if q == 0 else "  (back in stock)"))
+        STATE_FILE.write_text(json.dumps(state, indent=2))
+    return done
 
 
 def parse_markets(a):
@@ -293,6 +343,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="show payloads, call nothing but lookups")
     ap.add_argument("--sandbox", action="store_true")
     ap.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    ap.add_argument("--zero-sold-out", action="store_true",
+                    help="stock 0 on every site for listed books now sold out; restore stock when they are back")
     a = ap.parse_args()
     markets = parse_markets(a)
 
@@ -319,7 +371,10 @@ def main():
         todo[market] = items[: a.limit] if a.limit else items
         already = len(products) - len(items)
         print(f"{market}: {len(todo[market])} item(s) to list" + (f", {already} already done" if already else ""))
-    if not any(todo.values()):
+    updates = sold_out_updates(raw, state, markets, a.quantity) if a.zero_sold_out else {}
+    if updates:
+        print(f"{sum(len(o) for _, o in updates.values())} listing(s) need a stock change (sold out / back in stock).")
+    if not any(todo.values()) and not updates:
         return
 
     eb0 = Ebay(a.sandbox, markets[0])
@@ -335,6 +390,14 @@ def main():
         return
 
     eb0.login()
+    if updates:
+        if a.dry_run:
+            for sku, (q, offers) in updates.items():
+                print(f"   (dry run) {sku}: stock {q} on {', '.join(k.split(':')[0] for k, _ in offers)}")
+        else:
+            apply_stock_updates(eb0, updates, state)
+    if not any(todo.values()):
+        return
     location = eb0.location_key()
     if not location:
         sys.exit("No inventory location found. Create one in Seller Hub or set EBAY_LOCATION_KEY.")

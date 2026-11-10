@@ -158,6 +158,14 @@ class SPAPI:
                                               "requirements": "LISTING_OFFER_ONLY",
                                               "attributes": attributes})
 
+    def patch_quantity(self, sku, mkt_id, product_type, quantity):
+        """Listings Items API patch: replace only the stock (fulfillment_availability)."""
+        return self.call("PATCH", f"/listings/2021-08-01/items/{self.seller_id}/{quote(sku, safe='')}",
+                         params={"marketplaceIds": mkt_id},
+                         body={"productType": product_type, "patches": [{
+                             "op": "replace", "path": "/attributes/fulfillment_availability",
+                             "value": [{"fulfillment_channel_code": "DEFAULT", "quantity": quantity}]}]})
+
     def get_listing(self, sku, mkt_id):
         return self.call("GET", f"/listings/2021-08-01/items/{self.seller_id}/{quote(sku, safe='')}",
                          params={"marketplaceIds": mkt_id, "includedData": "summaries,issues,offers"})
@@ -242,6 +250,44 @@ def issues_text(issues):
 
 # --------------------------------------------------------------------- commands
 
+def stock_updates(api, raw, state, markets, a):
+    """Sold out -> stock 0, back in stock -> stock restored, for offers Amazon accepted."""
+    changes = []
+    for r in raw:
+        p = normalize(r)
+        for m in markets:
+            key = f"{m}:{p['sku']}"
+            e = state.get(key)
+            if not e or e.get("status") != "ACCEPTED":
+                continue
+            current = e.get("quantity", 1)
+            want = 0 if p["sold_out"] else (current or int(p["quantity"] or a.quantity))
+            if want != current:
+                changes.append((key, m, p, want))
+    if not changes:
+        return
+    print(f"{len(changes)} offer(s) need a stock change (sold out / back in stock).")
+    for key, m, p, want in changes:
+        if a.validate_only:
+            print(f"   (validate only) {key}: would set stock {want}")
+            continue
+        e = state[key]
+        try:
+            ptype = e.get("product_type")
+            if not ptype:
+                _, ptype, _ = api.find_asin(p["isbn"], MARKETS[m][0])
+            code, data = api.patch_quantity(p["sku"], MARKETS[m][0], ptype or "PRODUCT", want)
+        except Exception as ex:
+            print(f"   ! {key}: stock update failed: {ex}")
+            continue
+        if code != 200 or data.get("status") == "INVALID":
+            print(f"   ! {key}: stock update rejected ({code}): {issues_text(data.get('issues')) or data.get('errors') or data}")
+            continue
+        e.update(quantity=want, product_type=ptype)
+        save_state(state)
+        print(f"   {key}: stock {want}" + ("  (sold out)" if want == 0 else "  (back in stock)"))
+
+
 def cmd_push(api, a):
     markets = parse_markets(a.markets)
     path = Path(a.json_file)
@@ -273,6 +319,8 @@ def cmd_push(api, a):
         todo.append((i, p, pending))
     if a.limit:
         todo = todo[: a.limit]
+    if a.zero_sold_out:
+        stock_updates(api, raw, state, markets, a)
     n_offers = sum(len(ms) for _, _, ms in todo)
     print(f"{len(todo)} product(s), up to {n_offers} offer(s) to {'validate' if a.validate_only else 'push'}.")
     if not todo:
@@ -305,7 +353,8 @@ def cmd_push(api, a):
                 print(f"   {m}: {status}  {asin}  {amz_title[:50]}" + (f"  ({warn})" if warn else ""))
                 totals["ok"] += 1
                 if not a.validate_only:
-                    state[f"{m}:{p['sku']}"] = {"asin": asin, "status": status,
+                    state[f"{m}:{p['sku']}"] = {"asin": asin, "status": status, "product_type": ptype,
+                                                "quantity": int(p["quantity"] or a.quantity),
                                                 "submissionId": data.get("submissionId"),
                                                 "pushed_at": time.strftime("%Y-%m-%d %H:%M:%S")}
                     save_state(state)
@@ -358,6 +407,8 @@ def main():
     p.add_argument("--validate-only", action="store_true", help="Amazon validates the offers, nothing is listed")
     p.add_argument("--limit", type=int, default=0, help="max products this run (0 = all)")
     p.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    p.add_argument("--zero-sold-out", action="store_true",
+                   help="stock 0 for accepted offers now sold out; restore stock when they are back")
 
     sub.add_parser("status", parents=[common], help="check pushed offers (default: all recorded markets)")
 

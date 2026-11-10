@@ -264,6 +264,23 @@ def test_worten():
         check("rejected lines are not recorded as pushed", set(state) == {"T-NEW", "T-USED"} and "! T-REFURB" in out,
               f"state {sorted(state)}")
 
+        # stock sync: the pushed book sells out -> stock 0; it comes back -> stock restored
+        sold = [dict(r, sold_out=True) if (r.get("id") or r.get("sku")) == "T-NEW" else r
+                for r in json.loads(Path(pf).read_text(encoding="utf-8"))]
+        sold_file = Path(tmp) / "sold.json"
+        sold_file.write_text(json.dumps(sold), encoding="utf-8")
+        uploads = S.uploads
+        rc, out = run(["push", str(sold_file), "--yes", "--zero-sold-out", "--no-match-check"] + fast, tmp, ENV,
+                      codes=USED_CODES)
+        state = json.loads((Path(tmp) / "worten_posted.json").read_text(encoding="utf-8"))
+        check("--zero-sold-out: sold-out offer re-sent with stock 0",
+              S.uploads == uploads + 1 and S.offers.get("T-NEW", {}).get("quantity") == 0
+              and state["T-NEW"]["quantity"] == 0, out[-300:])
+        rc, out = run(["push", pf, "--yes", "--zero-sold-out", "--no-match-check"] + fast, tmp, ENV, codes=USED_CODES)
+        state = json.loads((Path(tmp) / "worten_posted.json").read_text(encoding="utf-8"))
+        check("--zero-sold-out: back in stock -> quantity restored",
+              S.offers.get("T-NEW", {}).get("quantity") == 1 and state["T-NEW"]["quantity"] == 1, out[-300:])
+
 
 def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")

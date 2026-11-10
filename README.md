@@ -606,6 +606,21 @@ python onbuy_push.py status                   # price, stock, buy box
 
 ---
 
+## Stop double sales (stock sync)
+
+The same copy is listed on many marketplaces. `stock_sync.py` reads new
+orders from the Mirakl shops, Amazon, eBay and Kaufland. Every other
+marketplace then gets stock 0 for the sold book, and the stock comes back
+when an order is cancelled. Run it every 15 minutes; `push_all.py` also runs
+it first when `"stock_sync": {"enabled": true}` is set. See
+[docs/stock_sync.md](docs/stock_sync.md).
+
+```powershell
+bws run -- python stock_sync.py sync --dry-run   # read orders, show what would change
+bws run -- python stock_sync.py sync             # take sold copies down everywhere
+python stock_sync.py status                      # sales that still count, stock sent
+```
+
 ## Run everything and get an email report
 
 Credentials (Gmail and the marketplaces) are stored in **Bitwarden Secrets
@@ -764,6 +779,7 @@ python tests\test_emag.py
 python tests\test_fruugo.py
 python tests\test_cdon.py
 python tests\test_onbuy.py
+python tests\test_stock_sync.py
 python tests\test_push_all.py
 ```
 

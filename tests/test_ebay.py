@@ -40,6 +40,7 @@ class S:  # recorded mock state
         cls.ebay_publish_calls = 0
         cls.by_market = {}
         cls.policy_markets = None
+        cls.stock_updates = []
 
 
 CURRENCY = {"EBAY_GB": "GBP", "EBAY_CH": "CHF", "EBAY_PL": "PLN"}   # all other EU sites: EUR
@@ -144,6 +145,18 @@ class Handler(BaseHTTPRequestHandler):
         if method == "PUT" and m:
             S.ebay_offers[m.group(1)] = dict(json.loads(body), offerId=m.group(1))
             return self.send(204)
+        if method == "POST" and p == "/sell/inventory/v1/bulk_update_price_quantity":
+            reqs = json.loads(body).get("requests") or []
+            if not 1 <= len(reqs) <= 25:
+                return self.send(400, {"errors": [{"message": "1..25 requests"}]})
+            out = []
+            for rq in reqs:
+                S.stock_updates.append(rq)
+                for o in rq.get("offers") or []:
+                    if o["offerId"] in S.ebay_offers:
+                        S.ebay_offers[o["offerId"]]["availableQuantity"] = o["availableQuantity"]
+                    out.append({"statusCode": 200, "sku": rq["sku"], "offerId": o["offerId"]})
+            return self.send(200, {"responses": out})
         m = re.fullmatch(r"/sell/inventory/v1/offer/([^/]+)/publish", p)
         if method == "POST" and m:
             S.ebay_publish_calls += 1
@@ -259,6 +272,30 @@ def test_ebay():
         calls = S.ebay_publish_calls
         rc, out = run(EBAY_WRAPPER, [pf, "--markets", "EBAY_ES,EBAY_DE,EBAY_GB", "--yes"], tmp, EBAY_ENV)
         check("re-run on several sites publishes nothing", S.ebay_publish_calls == calls, out[-300:])
+
+        # ---- stock sync: a listed book sells out -> stock 0 on every site, then back
+        sold = [dict(r, sold_out=True) if (r.get("id") or r.get("sku")) == "T-NEW" else r for r in RAW]
+        sold_file = Path(tmp) / "sold.json"
+        sold_file.write_text(json.dumps(sold), encoding="utf-8")
+        S.stock_updates = []
+        rc, out = run(EBAY_WRAPPER, [str(sold_file), "--markets", "EBAY_ES,EBAY_DE,EBAY_GB", "--zero-sold-out", "--yes"],
+                      tmp, EBAY_ENV)
+        state = json.loads((Path(tmp) / "ebay_posted.json").read_text())
+        upd = [u for u in S.stock_updates if u["sku"] == "T-NEW"]
+        check("--zero-sold-out: one bulk update sets stock 0 for all 3 sites",
+              len(upd) == 1 and upd[0]["shipToLocationAvailability"]["quantity"] == 0
+              and len(upd[0]["offers"]) == 3 and all(o["availableQuantity"] == 0 for o in upd[0]["offers"])
+              and all(state[f"{m}:T-NEW"]["quantity"] == 0 for m in ("EBAY_ES", "EBAY_DE", "EBAY_GB")), out[-400:])
+        S.stock_updates = []
+        rc, out = run(EBAY_WRAPPER, [str(sold_file), "--markets", "EBAY_ES,EBAY_DE,EBAY_GB", "--zero-sold-out", "--yes"],
+                      tmp, EBAY_ENV)
+        check("--zero-sold-out again: nothing to change", not S.stock_updates, out[-300:])
+        rc, out = run(EBAY_WRAPPER, [pf, "--markets", "EBAY_ES,EBAY_DE,EBAY_GB", "--zero-sold-out", "--yes"],
+                      tmp, EBAY_ENV)
+        state = json.loads((Path(tmp) / "ebay_posted.json").read_text())
+        check("--zero-sold-out: back in stock -> quantity restored on every site",
+              any(u["sku"] == "T-NEW" and u["shipToLocationAvailability"]["quantity"] == 1 for u in S.stock_updates)
+              and all(state[f"{m}:T-NEW"]["quantity"] == 1 for m in ("EBAY_ES", "EBAY_DE", "EBAY_GB")), out[-300:])
 
         S.policy_markets = set()
         rc, out = run(EBAY_WRAPPER, [pf, "--markets", "EBAY_FR,EBAY_IT", "--yes"], tmp, EBAY_ENV)

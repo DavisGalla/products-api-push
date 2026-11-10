@@ -80,6 +80,7 @@ stored in the code, the repository, or the configuration.
 | Scraper (separate project) | Produces `books.json`: id, title, price, ISBN, condition, images, stock | Python |
 | `push_all_config.json` | Which pushers run, their options, products file, report recipients, timeouts | JSON, not in git |
 | **`push_all.py`** | Runs the pushers one after another, counts results, writes logs, sends the email, prevents overlapping runs | Python standard library only |
+| **`stock_sync.py`** | Stops double sales: reads new orders (Mirakl ×7, Amazon, eBay, Kaufland), keeps one stock ledger, writes `books_synced.json`, runs every pusher with its sold-out option for the books whose stock changed. Every 15 minutes and at the start of `push_all.py` | Python + the pushers' API clients |
 | 26 pushers (`*_push.py`) | One per marketplace: validate products, match the catalog, create or update listings, record what was pushed | Python + `requests` (Vinted: standard library) |
 | State files (`*_posted.json`) | Per marketplace, what has already been pushed, so re-runs don't duplicate | JSON, local, not in git |
 | Bitwarden Secrets Manager + `bws` | Stores all credentials and injects them as environment variables at start-up | Bitwarden cloud, `bws` 2.1.0 |
@@ -219,18 +220,18 @@ credentials, and doesn't contact any real API:
 | Test | What is faked | Checks |
 |---|---|---|
 | `test_vinted_api.py` | Vinted Pro API (including HMAC signature verification) | 15 |
-| `test_ebay.py` | eBay APIs (one site and several sites per run: per-site policies, currency conversion, language aspect) | 19 |
-| `test_amazon.py` | SP-API: Catalog, Listings, Login with Amazon | 21 |
-| `test_casadellibro.py` | Mirakl API | 21 |
+| `test_ebay.py` | eBay APIs (one site and several sites per run: per-site policies, currency conversion, language aspect; stock 0 / restore with bulk_update_price_quantity) | 22 |
+| `test_amazon.py` | SP-API: Catalog, Listings (incl. stock patch), Login with Amazon | 24 |
+| `test_casadellibro.py` | Mirakl API (incl. stock 0 / restore) | 23 |
 | `test_fnac.py` | Fnac XML API | 17 |
 | `test_abebooks.py` | AbeBooks Inventory Update API | 22 |
 | `test_booklooker.py` | booklooker REST API 2.0 (token, account readiness, article file upload, error IDs) | 18 |
-| `test_elcorteingles.py` | Mirakl API | 21 |
-| `test_carrefour.py` | Mirakl API | 21 |
-| `test_worten.py` | Mirakl API | 21 |
-| `test_ibs.py` | Mirakl API | 21 |
-| `test_empik.py` | Mirakl API (with PLN conversion) | 22 |
-| `test_leclerc.py` | Mirakl API | 21 |
+| `test_elcorteingles.py` | Mirakl API (incl. stock 0 / restore) | 23 |
+| `test_carrefour.py` | Mirakl API (incl. stock 0 / restore) | 23 |
+| `test_worten.py` | Mirakl API (incl. stock 0 / restore) | 23 |
+| `test_ibs.py` | Mirakl API (incl. stock 0 / restore) | 23 |
+| `test_empik.py` | Mirakl API (with PLN conversion; stock 0 / restore) | 24 |
+| `test_leclerc.py` | Mirakl API (incl. stock 0 / restore) | 23 |
 | `test_kaufland.py` | Kaufland Seller API (including HMAC signature verification; several storefronts per run, CZK/PLN conversion) | 27 |
 | `test_bol.py` | bol.com Retailer API, Offers v11 (token login, media types, catalog check, 409 linking, reasons) | 21 |
 | `test_cdiscount.py` | Octopia Seller API (token, SellerId, catalog check, offer packages, paginated results) | 21 |
@@ -244,8 +245,9 @@ credentials, and doesn't contact any real API:
 | `test_fruugo.py` | Retailer side of the Fruugo feed (local web server for images and feed, SFTP via paramiko with pinned host key) and the documented CSV rules | 36 |
 | `test_cdon.py` | CDON merchant API (Basic auth, bulk create/update with limits, market currencies, asynchronous batch and SKU statuses, sku_already_exists, categories, 429) | 26 |
 | `test_onbuy.py` | OnBuy API v2 (token renewal, barcode search in 50s, batch listings with per-row errors, by-sku update/delete, several sites, check-winning, 429) | 21 |
+| `test_stock_sync.py` | Order APIs: Mirakl OR11, Amazon Orders v2026-01-01, eBay Fulfillment, Kaufland order units; ledger, cancellations, settle rule, pusher commands, push_all integration | 26 |
 | `test_push_all.py` | Fake pushers + fake mail server | 24 |
-| **Total** | | **604, all passing** |
+| **Total** | | **650, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.
@@ -255,6 +257,7 @@ fields, limits, error codes, and asynchronous processing.
 | Part | Status |
 |---|---|
 | All 26 pushers | Built and passing their tests. **Not yet run against the real marketplaces**, because there are no seller accounts or API credentials yet. |
+| Stock sync (stop double sales) | Built and tested against mocks: order readers for Mirakl ×7, Amazon, eBay, Kaufland; stock 0 on every marketplace with a sold-out option. Not yet run against real order APIs. |
 | Runner + email report | Built and tested. **Verified for real on 2026-11-05**: credentials from Bitwarden, test email and dry-run report delivered through Gmail. |
 | Bitwarden Secrets Manager | Set up and working (project, machine account, token, `bws` 2.1.0). |
 | Server | Not yet deployed. The commands and steps are documented. |

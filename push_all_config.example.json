@@ -5,6 +5,7 @@
     "to": ["you@example.com"],
     "when": "always"
   },
+  "stock_sync": {"enabled": false},
   "pushers": {
     "vinted":        {"enabled": false, "args": ["--catalog-id", "0", "--package-size-id", "0"]},
     "ebay":          {"enabled": false, "args": ["--markets", "all"]},

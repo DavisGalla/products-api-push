@@ -91,6 +91,7 @@ One pusher failing doesn't stop the others.
   "json_file": "C:/programming/scraper/books.json",
   "timeout_minutes": 60,
   "email": {"to": ["you@example.com", "boss@example.com"], "when": "always"},
+  "stock_sync": {"enabled": true},
   "pushers": {
     "vinted":        {"enabled": true,  "args": ["--catalog-id", "1234", "--package-size-id", "1"]},
     "ebay":          {"enabled": false, "args": ["--markets", "all"]},
@@ -121,6 +122,11 @@ One pusher failing doesn't stop the others.
   }
 }
 ```
+
+`"stock_sync": {"enabled": true}` makes the runner start with
+[stock_sync.py](stock_sync.md): it reads new orders, takes sold copies down on
+every marketplace, and the pushers then list `books_synced.json` (the books
+with our sales taken off). It appears as **Stock sync** in the report.
 
 | Key | Meaning |
 |---|---|

@@ -75,3 +75,9 @@ onbuy_listings.json
 push_all_config.json
 push_all.lock
 logs/
+stock_ledger.json
+stock_ledger.json.tmp
+books_synced.json
+books_synced.json.tmp
+books_sync_changes.json
+books_sync_changes.json.tmp

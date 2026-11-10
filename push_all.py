@@ -265,10 +265,45 @@ def run_pusher(name, spec, settings, cfg, a, log_dir):
     return res
 
 
+def run_stock_sync(cfg, a, log_dir):
+    """stock_sync.py first (inside our lock): new orders -> books_synced.json + stock 0 everywhere."""
+    res = {"name": "stock_sync", "label": "Stock sync", "pushed": 0, "skipped": 0, "already": 0,
+           "problems": [], "tail": [], "exit_code": None, "seconds": 0, "log": None}
+    cmd = [sys.executable, str(BASE / "stock_sync.py"), "sync"]
+    if cfg.get("json_file"):
+        cmd += ["--source", str(cfg["json_file"])]
+    if a.dry_run:
+        cmd.append("--dry-run")
+    env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1", PUSH_ALL_RUNNING="1")
+    start = time.time()
+    print(f"\n=== Stock sync: {' '.join(cmd[1:])}", flush=True)
+    try:
+        r = subprocess.run(cmd, cwd=BASE, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                           stderr=subprocess.STDOUT, timeout=float(cfg.get("timeout_minutes", 60)) * 60,
+                           encoding="utf-8", errors="replace")
+        output, res["exit_code"] = r.stdout, r.returncode
+    except subprocess.TimeoutExpired:
+        output, res["exit_code"] = "", "timeout"
+    res["seconds"] = round(time.time() - start)
+    print(output, end="" if output.endswith("\n") else "\n", flush=True)
+    log = log_dir / "stock_sync.log"
+    log.write_text(f"$ {' '.join(cmd)}\n\n{output}", encoding="utf-8")
+    res["log"] = log
+    lines = output.splitlines()
+    res["problems"] = [l.strip() for l in lines if RE_PROBLEM.search(l)]
+    res["tail"] = [l for l in lines if l.strip()][-4:]
+    summary = next((l.strip() for l in lines if "new sale(s)" in l), "")
+    if res["exit_code"] != 0:
+        res.update(status="FAILED", note=f"exit code {res['exit_code']}: {res['tail'][-1] if res['tail'] else ''}")
+    else:
+        res.update(status="PROBLEMS" if res["problems"] else "OK", note=summary)
+    return res
+
+
 # ---------------------------------------------------------------- report
 
 def summary_line(r):
-    if r["status"] in ("NOT CONFIGURED", "DISABLED"):
+    if r["status"] in ("NOT CONFIGURED", "DISABLED") or r.get("name") == "stock_sync":
         return r["note"]
     parts = [f"{r['pushed']} pushed"]
     if r["problems"]:
@@ -375,7 +410,8 @@ def send_email(subject, text, html_body, attachments=()):
 # ------------------------------------------------------------------ main
 
 def main():
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     ap = argparse.ArgumentParser(description="Run all enabled pushers and email one report")
     ap.add_argument("--only", help="comma-separated pushers to run, e.g. vinted,amazon")
     ap.add_argument("--dry-run", action="store_true",
@@ -408,6 +444,12 @@ def main():
         log_dir = LOG_DIR / time.strftime("%Y-%m-%d_%H%M%S")
         log_dir.mkdir(parents=True, exist_ok=True)
         results = []
+        if cfg.get("stock_sync", {}).get("enabled") and only is None:
+            sync = run_stock_sync(cfg, a, log_dir)
+            results.append(sync)
+            synced = Path(os.environ.get("STOCK_SYNC_DIR") or BASE) / "books_synced.json"
+            if sync["status"] != "FAILED" and synced.exists():
+                cfg = dict(cfg, json_file=str(synced))     # pushers list the synced stock
         for name, spec in PUSHERS.items():
             settings = cfg.get("pushers", {}).get(name, {})
             if only is not None and name not in only:

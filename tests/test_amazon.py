@@ -41,6 +41,7 @@ CONDITIONS = {"new_new", "new_open_box", "used_like_new", "used_very_good", "use
 
 
 class S:
+    patches = []
     listings = {}         # (market code, sku) -> body
     throttle_once = True  # first catalog call returns 429 to exercise the retry
     catalog_calls = 0
@@ -101,6 +102,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self): self.route("GET")
     def do_POST(self): self.route("POST")
     def do_PUT(self): self.route("PUT")
+    def do_PATCH(self): self.route("PATCH")
 
     def route(self, method):
         n = int(self.headers.get("Content-Length") or 0)
@@ -156,6 +158,17 @@ class Handler(BaseHTTPRequestHandler):
                     S.listings[(code, sku)] = b
                     return self.send(200, {"sku": sku, "status": "ACCEPTED",
                                            "submissionId": f"sub-{len(S.listings)}", "issues": []})
+                if method == "PATCH":
+                    b = json.loads(body)
+                    if (code, sku) not in S.listings:
+                        return self.send(404, {"errors": [{"code": "NOT_FOUND", "message": "SKU not found"}]})
+                    patches = b.get("patches") or []
+                    if not b.get("productType") or len(patches) != 1 or patches[0].get("op") != "replace" \
+                            or patches[0].get("path") != "/attributes/fulfillment_availability":
+                        return self.send(400, {"errors": [{"code": "InvalidInput", "message": "bad patch"}]})
+                    S.listings[(code, sku)]["attributes"]["fulfillment_availability"] = patches[0]["value"]
+                    S.patches.append((code, sku, patches[0]["value"][0]["quantity"]))
+                    return self.send(200, {"sku": sku, "status": "ACCEPTED", "submissionId": "patch", "issues": []})
                 if method == "GET":
                     if (code, sku) not in S.listings:
                         return self.send(404, {"errors": [{"code": "NOT_FOUND", "message": "SKU not found"}]})
@@ -267,6 +280,26 @@ def test_amazon():
         check("status checks every recorded offer", rc == 0 and out.count("LIVE") == len(S.listings), out[-300:])
         rc, out = run(["status", "--markets", "DE"], tmp, AMAZON_ENV)
         check("status --markets filters", out.count("LIVE") == 2 and "ES:" not in out, out[-300:])
+
+        # stock sync: the listed book sells out -> stock 0 in every store, then back
+        raw = json.loads(Path(pf).read_text(encoding="utf-8"))
+        sold_file = Path(tmp) / "sold.json"
+        sold_file.write_text(json.dumps([dict(r, sold_out=True) if (r.get("id") or r.get("sku")) == "T-NEW" else r
+                                         for r in raw]), encoding="utf-8")
+        S.patches = []
+        rc, out = run(["push", str(sold_file), "--yes", "--markets", "ES,DE", "--zero-sold-out"], tmp, AMAZON_ENV)
+        state = json.loads((Path(tmp) / "amazon_posted.json").read_text(encoding="utf-8"))
+        check("--zero-sold-out: stock 0 patched in ES and DE",
+              sorted(S.patches) == [("DE", "T-NEW", 0), ("ES", "T-NEW", 0)]
+              and state["ES:T-NEW"]["quantity"] == 0 and state["DE:T-NEW"]["quantity"] == 0, out[-400:])
+        S.patches = []
+        rc, out = run(["push", str(sold_file), "--yes", "--markets", "ES,DE", "--zero-sold-out"], tmp, AMAZON_ENV)
+        check("--zero-sold-out again: nothing to change", not S.patches, out[-300:])
+        rc, out = run(["push", pf, "--yes", "--markets", "ES,DE", "--zero-sold-out"], tmp, AMAZON_ENV)
+        state = json.loads((Path(tmp) / "amazon_posted.json").read_text(encoding="utf-8"))
+        check("--zero-sold-out: back in stock -> stock restored",
+              sorted(S.patches) == [("DE", "T-NEW", 1), ("ES", "T-NEW", 1)] and state["ES:T-NEW"]["quantity"] == 1,
+              out[-400:])
 
 
 def main():
