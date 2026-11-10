@@ -9,7 +9,7 @@
   "pushers": {
     "vinted":        {"enabled": false, "args": ["--catalog-id", "0", "--package-size-id", "0"]},
     "ebay":          {"enabled": false, "args": ["--markets", "all"]},
-    "amazon":        {"enabled": false, "args": ["--markets", "ES"]},
+    "amazon":        {"enabled": false, "args": ["--markets", "all"]},
     "casadellibro":  {"enabled": false, "args": []},
     "fnac":          {"enabled": false, "args": []},
     "abebooks":      {"enabled": false, "args": []},
