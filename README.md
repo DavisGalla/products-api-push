@@ -425,8 +425,12 @@ python allegro_push.py auth            # open the link, confirm the code (once)
 python allegro_push.py check           # account settings found?
 python allegro_push.py push --dry-run  # writes allegro_offers.json (prices in PLN)
 python allegro_push.py push --limit 1  # one real offer
-python allegro_push.py status
+python allegro_push.py status         # also per country: allegro.cz / .sk / .hu
 ```
+
+The same offers can also appear on allegro.cz, allegro.sk and allegro.hu (one
+shared stock). That happens when your shipping rates have a delivery method
+to that country; Allegro converts the price and translates the text.
 
 ---
 

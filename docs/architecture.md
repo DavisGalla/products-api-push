@@ -112,7 +112,7 @@ doesn't contain any marketplace logic.
 | Kaufland (9 storefronts: es, de, at, fr, it, nl, sk, cz, pl) | Kaufland Seller API v2 | Client key + secret key; every request is HMAC-SHA256 signed | Checks the catalog by EAN, then creates a unit (offer) per book; `id_offer` makes re-sends update it; one or several storefronts per run (`--storefronts`; CZK/PLN converted) | Official, public |
 | bol.com (Netherlands + Belgium) | bol.com Retailer API, Offers API v11 | Client ID + secret → short-lived token (client credentials) | Checks the catalog by EAN, then creates an offer per book (new or used); economic operator for GPSR | Official, public |
 | Cdiscount (France) | Octopia Seller API (`/seller/v2`) | Client ID + secret → 2-hour token, plus Seller ID | Checks the catalog by EAN, then sends offers (new or used) in an Upsert offer package and reads each offer's result | Official, public |
-| Allegro (Poland) | Allegro REST API | Client ID + secret, one-time device-code authorization (12 h token, single-use refresh token, max 3 months) | Offer on the catalog product by EAN (new or used), PLN price, account shipping/after-sales settings and GPSR producer | Official, public (OpenAPI) |
+| Allegro (Poland + allegro.cz / .sk / .hu) | Allegro REST API | Client ID + secret, one-time device-code authorization (12 h token, single-use refresh token, max 3 months) | Offer on the catalog product by EAN (new or used), PLN price, account shipping/after-sales settings and GPSR producer | Official, public (OpenAPI) |
 | AliExpress (local seller, aliexpress.es) | AliExpress Open Platform API | App key + secret (HMAC-SHA256 signed) and the seller's OAuth token, refreshed automatically | Creates its own product per book; category, attributes and images come from AliExpress's EAN database when it knows the ISBN | Official, public |
 | Temu (local seller, temu.com/es) | Temu Partner API (`bg.local.goods.*`) | App key + secret (MD5-signed requests) and the access token from Seller Center | Creates its own product per book in one configured category; Temu reviews the product and its price | Official docs need a seller login; built from a public daily mirror |
 | TikTok Shop (Spain, EU) | TikTok Shop Partner API (202309+) | App key + secret (HMAC-SHA256 signed) and the seller's OAuth token, refreshed automatically | Creates its own product per book in one configured category, with GPSR IDs; TikTok reviews it | Official docs are a web app; built from a generated OpenAPI spec and a widely used client |
@@ -235,7 +235,7 @@ credentials, and doesn't contact any real API:
 | `test_kaufland.py` | Kaufland Seller API (including HMAC signature verification; several storefronts per run, CZK/PLN conversion) | 27 |
 | `test_bol.py` | bol.com Retailer API, Offers v11 (token login, media types, catalog check, 409 linking, reasons) | 21 |
 | `test_cdiscount.py` | Octopia Seller API (token, SellerId, catalog check, offer packages, paginated results) | 21 |
-| `test_allegro.py` | Allegro REST API (device flow, rotating refresh token, catalog by GTIN, 201/202 creation, end/activate) | 22 |
+| `test_allegro.py` | Allegro REST API (device flow, rotating refresh token, catalog by GTIN, 201/202 creation, end/activate, additional marketplaces) | 29 |
 | `test_aliexpress.py` | AliExpress Open Platform (signature, tokens, EAN lookup, photo upload, product post) | 26 |
 | `test_temu.py` | Temu Partner API (signature, category template, variation, photo upload, goods add, stock/price/sale status) | 22 |
 | `test_tiktok.py` | TikTok Shop Partner API (signature, tokens, shop cipher, attributes/rules, GPSR, photo upload, create, stock/price, activate/deactivate) | 28 |
@@ -248,7 +248,7 @@ credentials, and doesn't contact any real API:
 | `test_stock_sync.py` | Order APIs: Mirakl OR11, Amazon Orders v2026-01-01, eBay Fulfillment, Kaufland order units; ledger, cancellations, settle rule, pusher commands, push_all integration | 26 |
 | `test_order_readers.py` | Order readers for bol.com, Cdiscount, Allegro, OTTO, eMAG, CDON, OnBuy, booklooker, Fruugo, Vinted, Temu, TikTok (filters, paging, SKU/EAN mapping, cancellations) | 27 |
 | `test_push_all.py` | Fake pushers + fake mail server | 24 |
-| **Total** | | **677, all passing** |
+| **Total** | | **684, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.

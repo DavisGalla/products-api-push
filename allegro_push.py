@@ -75,6 +75,16 @@ RESPONSIBLE_PRODUCER_ID = ""        # GPSR responsible producer (e.g. the publis
 # GPSR safety information sent with every book (plain text, Polish).
 SAFETY_TEXT = "Książka. Produkt nie wymaga szczególnych ostrzeżeń dotyczących bezpieczeństwa."
 INVOICE = "VAT"                     # VAT, VAT_MARGIN, WITHOUT_VAT or NO_INVOICE
+
+# Allegro's additional marketplaces (allegro.cz, allegro.sk, allegro.hu). An offer is shown there
+# when your shipping rates have a delivery method for that country, the offer is linked to a
+# catalog product (always true here) and you sell as a verified company. Stock is shared.
+FOREIGN_MARKETPLACES = ["allegro-cz", "allegro-sk", "allegro-hu"]
+# "auto": Allegro converts the PLN price every business day (ECB rate, rule "Przelicznik cen").
+# "eur":  send our own price, converted from the EUR source price with FOREIGN_EUR_RATE.
+FOREIGN_PRICES = "auto"
+FOREIGN_CURRENCY = {"allegro-cz": "CZK", "allegro-sk": "EUR", "allegro-hu": "HUF"}
+FOREIGN_EUR_RATE = {"CZK": "25.0", "EUR": "1", "HUF": "395"}
 # ======================================================================
 
 MEDIA = "application/vnd.allegro.public.v1+json"
@@ -331,6 +341,31 @@ def problems_of(p):
     return probs
 
 
+def parse_marketplaces(text):
+    v = (text if text is not None else ",".join(FOREIGN_MARKETPLACES)).strip().lower()
+    if v in ("", "none"):
+        return []
+    ids = list(FOREIGN_CURRENCY) if v == "all" else [
+        (x if x.startswith("allegro-") else f"allegro-{x}") for x in (s.strip() for s in v.split(",")) if x]
+    bad = [m for m in ids if m not in FOREIGN_CURRENCY]
+    if bad:
+        sys.exit(f"Unknown Allegro marketplace(s): {', '.join(bad)}. Known: cz, sk, hu, 'all' or 'none'.")
+    return list(dict.fromkeys(ids))
+
+
+def foreign_prices(p, a):
+    """additionalMarketplaces with our own prices (FOREIGN_PRICES = 'eur'), or None (Allegro converts)."""
+    if a.foreign_prices != "eur" or not a.marketplaces:
+        return None
+    out = {}
+    for m in a.marketplaces:
+        cur = FOREIGN_CURRENCY[m]
+        v = Decimal(str(p["price"])) * Decimal(str(a.price_factor)) * Decimal(FOREIGN_EUR_RATE[cur])
+        q = Decimal("1") if cur == "HUF" else Decimal("0.01")
+        out[m] = {"sellingMode": {"price": {"amount": str(v.quantize(q, rounding=ROUND_HALF_UP)), "currency": cur}}}
+    return out
+
+
 def offer_body(p, a, ctx):
     product = {"product": {"id": p["ean"], "idType": "GTIN"},
                "safetyInformation": {"type": "TEXT", "description": SAFETY_TEXT}}
@@ -349,6 +384,9 @@ def offer_body(p, a, ctx):
     }
     if ctx.get("shipping"):
         body["delivery"]["shippingRates"] = {"id": ctx["shipping"]}
+    foreign = foreign_prices(p, a)
+    if foreign:
+        body["additionalMarketplaces"] = foreign
     after = {k: {"id": v} for k, v in (("returnPolicy", ctx.get("returns")), ("impliedWarranty", ctx.get("warranty"))) if v}
     if after:
         body["afterSalesServices"] = after
@@ -394,6 +432,25 @@ def cmd_check(api, a):
     ctx = account_context(api)
     for m in ctx["missing"]:
         print(f"   ! no {m} in your account - create one on Allegro (Sales Center) before pushing")
+    try:
+        markets = api.get("/marketplaces").get("marketplaces") or []
+    except ApiError as e:
+        print(f"   (marketplaces not readable: {e})")
+        return
+    wanted = a.marketplaces
+    print("Allegro marketplaces:")
+    for m in markets:
+        base = ((m.get("currencies") or {}).get("base") or {}).get("code")
+        ships = ", ".join(c.get("code") for c in m.get("shippingCountries") or [])
+        tag = "  <- additional marketplace you sell on" if m.get("id") in wanted else ""
+        print(f"   {m.get('id')}: {base}, ships to {ships}{tag}")
+    unknown = [w for w in wanted if w not in {m.get("id") for m in markets}]
+    if unknown:
+        print(f"   ! not available for your account: {', '.join(unknown)}")
+    if wanted:
+        print(f"   Offers appear on {', '.join(wanted)} when your shipping rates have a delivery method to that "
+              f"country (Sales Center -> shipping rates). Prices: "
+              + ("converted by Allegro from PLN (ECB rate)." if FOREIGN_PRICES == "auto" else "our own, from EUR."))
 
 
 def cmd_lookup(api, a):
@@ -492,6 +549,9 @@ def cmd_push(api, a):
         patch = {}
         if price != info.get("price"):
             patch["sellingMode"] = {"price": {"amount": price, "currency": CURRENCY}}
+            foreign = foreign_prices(p, a)
+            if foreign:
+                patch["additionalMarketplaces"] = foreign
         if stock != info.get("stock"):
             patch["stock"] = {"available": stock, "unit": "UNIT"}
         if patch:
@@ -538,6 +598,23 @@ def cmd_status(api, a):
         price = ((o.get("sellingMode") or {}).get("price") or {}).get("amount")
         stock = o.get("stock") or {}
         print(f"{sku}: {pub}  price={price} PLN  stock={stock.get('available')}  sold(30d)={stock.get('sold', 0)}")
+        extra = o.get("additionalMarketplaces") or {}
+        for m in a.marketplaces:
+            info = extra.get(m) or {}
+            st = (info.get("publication") or {}).get("state") or "NOT_REQUESTED"
+            mp = ((info.get("sellingMode") or {}).get("price") or {})
+            line = f"   {m}: {st}" + (f"  {mp.get('amount')} {mp.get('currency')}" if mp.get("amount") else "")
+            if st == "REFUSED":
+                try:
+                    detail = api.get(f"/sale/product-offers/{o.get('id')}")
+                    reasons = (((detail.get("additionalMarketplaces") or {}).get(m) or {}).get("publication") or {}
+                               ).get("refusalReasons") or []
+                    line += "  (" + "; ".join(f"{r.get('code')}: {r.get('userMessage')}" for r in reasons) + ")"
+                except ApiError:
+                    pass
+            elif st == "NOT_REQUESTED":
+                line += "  (no delivery method to this country in your shipping rates)"
+            print(line)
 
 
 def main():
@@ -545,7 +622,7 @@ def main():
     ap = argparse.ArgumentParser(description="Push offers to Allegro (REST API)")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("auth", help="authorize the app for your Allegro account (device code)")
-    sub.add_parser("check", help="account, shipping rates, after-sales conditions, GPSR producer")
+    ck = sub.add_parser("check", help="account, shipping rates, after-sales conditions, GPSR producer, marketplaces")
     s = sub.add_parser("lookup", help="check whether Allegro's catalog knows an ISBN/EAN")
     s.add_argument("isbn")
     p = sub.add_parser("push", help="create offers from a JSON file")
@@ -560,8 +637,16 @@ def main():
     p.add_argument("--dry-run", action="store_true", help="write allegro_offers.json, send nothing")
     p.add_argument("--limit", type=int, default=0, help="max new offers this run (0 = all)")
     p.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
-    sub.add_parser("status", help="list your offers: active / ended, price, stock")
+    p.add_argument("--foreign-prices", choices=["auto", "eur"], default=FOREIGN_PRICES,
+                   help="allegro.cz/.sk/.hu prices: auto = Allegro converts the PLN price; eur = ours, from EUR")
+    st = sub.add_parser("status", help="list your offers: active / ended, price, stock, foreign marketplaces")
+    for sp in (ck, p, st):
+        sp.add_argument("--marketplaces", default=None,
+                        help="additional marketplaces: cz,sk,hu, 'all' or 'none' (default: FOREIGN_MARKETPLACES)")
     a = ap.parse_args()
+    if hasattr(a, "marketplaces"):
+        a.marketplaces = parse_marketplaces(a.marketplaces)
+        a.marketplaces_text = ",".join(a.marketplaces) or "none"
     if a.cmd == "push" and a.dry_run:
         creds = all(os.environ.get(k) for k in ("ALLEGRO_CLIENT_ID", "ALLEGRO_CLIENT_SECRET"))
         if not (creds and (TOKEN_FILE.exists() or os.environ.get("ALLEGRO_REFRESH_TOKEN"))):

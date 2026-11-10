@@ -135,6 +135,13 @@ class Handler(BaseHTTPRequestHandler):
         if m == "GET" and p == "/me":
             return self.send(200, {"id": "48118888", "login": "LibrosTestES", "company": {"name": "Libros Test SL"},
                                    "baseMarketplace": {"id": "allegro-pl"}})
+        if m == "GET" and p == "/marketplaces":
+            mk = lambda i, c, ships: {"id": i, "currencies": {"base": {"code": c}, "additional": []},
+                                      "languages": {"offerCreation": [], "offerDisplay": []},
+                                      "shippingCountries": [{"code": x} for x in ships]}
+            return self.send(200, {"marketplaces": [mk("allegro-pl", "PLN", ["PL", "CZ", "SK", "HU"]),
+                                                    mk("allegro-cz", "CZK", ["CZ"]), mk("allegro-sk", "EUR", ["SK"]),
+                                                    mk("allegro-hu", "HUF", ["HU"])]})
         if m == "GET" and p == "/sale/shipping-rates":
             return self.send(200, {"shippingRates": [{"id": "ship-1", "name": "Envío desde España"}]})
         if m == "GET" and p == "/after-sales-service-conditions/return-policies":
@@ -164,7 +171,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(200, {"offer": {"id": oid}, "operation": {"id": parts[4], "status": "COMPLETED"}})
             o = S.offers[oid]
             if m == "GET":
-                return self.send(200, o)
+                return self.send(200, dict(o, additionalMarketplaces=detail_markets(o)))
             if m == "PATCH":
                 S.patches += 1
                 if "sellingMode" in b:
@@ -174,6 +181,11 @@ class Handler(BaseHTTPRequestHandler):
                     o["sellingMode"]["price"] = price
                 if "stock" in b:
                     o["stock"]["available"] = b["stock"]["available"]
+                if "additionalMarketplaces" in b:
+                    bad = foreign_problems(b["additionalMarketplaces"])
+                    if bad:
+                        return self.send(422, err(*bad))
+                    o["additionalMarketplaces"] = b["additionalMarketplaces"]
                 return self.send(200, o)
         if p.startswith("/sale/offer-publication-commands/"):
             cid = p.rsplit("/", 1)[1]
@@ -189,7 +201,8 @@ class Handler(BaseHTTPRequestHandler):
         if m == "GET" and p == "/sale/offers":
             ext = set(q.get("external.id") or [])
             return self.send(200, {"offers": [{"id": o["id"], "external": o["external"], "publication": o["publication"],
-                                               "sellingMode": o["sellingMode"], "stock": dict(o["stock"], sold=0)}
+                                               "sellingMode": o["sellingMode"], "stock": dict(o["stock"], sold=0),
+                                               "additionalMarketplaces": listing_markets(o)}
                                               for o in S.offers.values() if not ext or o["external"]["id"] in ext],
                                    "count": len(S.offers), "totalCount": len(S.offers)})
         return self.send(404, err("NotFound", f"no mock for {m} {p}"))
@@ -222,12 +235,17 @@ class Handler(BaseHTTPRequestHandler):
         asv = b.get("afterSalesServices") or {}
         if (asv.get("returnPolicy") or {}).get("id") != "ret-1" or (asv.get("impliedWarranty") or {}).get("id") != "war-1":
             problems.append(("afterSalesServices", "Return policy and implied warranty are required for business sellers"))
+        if "additionalMarketplaces" in b:
+            bad = foreign_problems(b["additionalMarketplaces"])
+            if bad:
+                return self.send(422, err(*bad))
         if problems:
             return self.send(422, {"errors": [{"code": "ValidationError", "message": msg, "userMessage": msg, "path": path}
                                               for path, msg in problems]})
         oid = str(7700000000 + len(S.offers) + 1)
         S.offers[oid] = {"id": oid, "productSet": b["productSet"], "sellingMode": sm, "stock": dict(st),
                          "external": b.get("external") or {}, "publication": {"status": "ACTIVE"},
+                         "additionalMarketplaces": b.get("additionalMarketplaces") or {},
                          "validation": {"errors": []}}
         if S.async_next:
             S.async_next = False
@@ -235,6 +253,43 @@ class Handler(BaseHTTPRequestHandler):
             S.operations[op] = {"polls": 0}
             return self.send(202, {"id": oid}, {"Location": f"{BASE}/sale/product-offers/{oid}/operations/{op}"})
         return self.send(201, S.offers[oid])
+
+
+FOREIGN = {"allegro-cz": "CZK", "allegro-sk": "EUR", "allegro-hu": "HUF"}
+
+
+def foreign_problems(extra):
+    for mid, v in extra.items():
+        if mid == "allegro-pl":
+            return ("BaseMarketplaceInAdditionalMarketplacesException", "base marketplace", "additionalMarketplaces")
+        if mid not in FOREIGN:
+            return ("UnsupportedAdditionalMarketplaceException", f"unsupported {mid}", "additionalMarketplaces")
+        price = ((v.get("sellingMode") or {}).get("price") or {})
+        if price.get("currency") != FOREIGN[mid] or not isinstance(price.get("amount"), str):
+            return ("ValidationError", f"price for {mid} must be in {FOREIGN[mid]}", f"additionalMarketplaces.{mid}")
+    return None
+
+
+def auto_price(o, mid):
+    pln = float(o["sellingMode"]["price"]["amount"])
+    rate = {"allegro-cz": 5.9, "allegro-sk": 0.235, "allegro-hu": 92.0}[mid]
+    own = ((o.get("additionalMarketplaces") or {}).get(mid) or {}).get("sellingMode", {}).get("price")
+    return own or {"amount": f"{pln * rate:.2f}", "currency": FOREIGN[mid]}
+
+
+def listing_markets(o):
+    """cz: APPROVED, sk: REFUSED, hu: no delivery method (NOT_REQUESTED) - like Allegro's offer list."""
+    return {"allegro-cz": {"publication": {"state": "APPROVED"}, "sellingMode": {"price": auto_price(o, "allegro-cz")}},
+            "allegro-sk": {"publication": {"state": "REFUSED"}, "sellingMode": {"price": auto_price(o, "allegro-sk")}},
+            "allegro-hu": {"publication": {"state": "NOT_REQUESTED"}, "sellingMode": None}}
+
+
+def detail_markets(o):
+    d = listing_markets(o)
+    d["allegro-sk"]["publication"]["refusalReasons"] = [{"code": "VQR009_PRICE_IN_ADDITIONAL_MARKETPLACE_MISMATCH",
+                                                         "userMessage": "price difference too big",
+                                                         "parameters": {"maxAllowedPriceDecreasePercent": ["20"]}}]
+    return d
 
 
 RESULTS = []
@@ -358,6 +413,39 @@ def test_allegro():
         rc, out = run(["push", pf, "--yes", "--resend"], tmp, ENV)
         check("back in stock + --resend reactivates it", by_ext("T-NEW")["publication"]["status"] == "ACTIVE"
               and "reactivated 1 offer" in out, out[-300:])
+
+        # ---- additional marketplaces (allegro.cz / .sk / .hu)
+        rc, out = run(["check"], tmp, ENV)
+        check("check lists the marketplaces and marks cz/sk/hu", "allegro-cz: CZK" in out and "allegro-hu: HUF" in out
+              and out.count("additional marketplace you sell on") == 3 and "delivery method" in out, out[-500:])
+        rc, out = run(["status"], tmp, ENV)
+        check("status per marketplace: cz APPROVED (CZK price), sk REFUSED with Allegro's reason, hu no delivery method",
+              "allegro-cz: APPROVED" in out and "CZK" in out and "VQR009_PRICE_IN_ADDITIONAL_MARKETPLACE_MISMATCH" in out
+              and "allegro-hu: NOT_REQUESTED" in out and "no delivery method" in out, out[-600:])
+        rc, out = run(["status", "--marketplaces", "cz"], tmp, ENV)
+        check("--marketplaces cz: only allegro.cz shown", "allegro-cz:" in out and "allegro-sk:" not in out, out[-300:])
+        rc, out = run(["push", pf, "--dry-run"], tmp)
+        prev = json.loads((Path(tmp) / "allegro_offers.json").read_text(encoding="utf-8")) if (Path(tmp) / "allegro_offers.json").exists() else []
+        check("default (auto): no own foreign prices sent - Allegro converts the PLN price",
+              all("additionalMarketplaces" not in o for o in prev), str(prev)[:300])
+
+    with tempfile.TemporaryDirectory() as tmp:
+        newest = lambda sku: max((o for o in S.offers.values() if o["external"].get("id") == sku), key=lambda o: o["id"])
+        run(["auth"], tmp, ENV)
+        rc, out = run(["push", pf, "--yes", "--foreign-prices", "eur", "--limit", "1"], tmp, ENV)
+        o = newest("T-NEW")
+        extra = o.get("additionalMarketplaces") or {}
+        check("--foreign-prices eur: own prices 212.50 CZK, 8.50 EUR, 3358 HUF (from 8.50 EUR)",
+              extra.get("allegro-cz", {}).get("sellingMode", {}).get("price") == {"amount": "212.50", "currency": "CZK"}
+              and extra.get("allegro-sk", {}).get("sellingMode", {}).get("price") == {"amount": "8.50", "currency": "EUR"}
+              and extra.get("allegro-hu", {}).get("sellingMode", {}).get("price") == {"amount": "3358", "currency": "HUF"},
+              str(extra) + out[-300:])
+        rc, out = run(["push", pf, "--yes", "--resend", "--foreign-prices", "eur", "--price-factor", "0.9"], tmp, ENV)
+        extra = newest("T-NEW").get("additionalMarketplaces") or {}
+        check("--resend with eur prices: foreign prices updated with the PLN price",
+              extra.get("allegro-cz", {}).get("sellingMode", {}).get("price", {}).get("amount") == "191.25", str(extra))
+        rc, out = run(["push", pf, "--dry-run", "--marketplaces", "xx"], tmp)
+        check("unknown marketplace refused", rc != 0 and "Unknown Allegro marketplace" in out, out[-200:])
 
         rc, out = run(["push", pf, "--yes", "--resend", "--no-match-check"], tmp, ENV, conds={"RefurbishedCondition": "11323_2"})
         state = json.loads((Path(tmp) / "allegro_posted.json").read_text(encoding="utf-8"))

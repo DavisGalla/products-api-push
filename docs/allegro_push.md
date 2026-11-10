@@ -116,16 +116,51 @@ kept on the server too, so that the latest token is always available.
 | `SHIPPING_RATES_ID`, `RETURN_POLICY_ID`, `IMPLIED_WARRANTY_ID`, `RESPONSIBLE_PRODUCER_ID` | Account settings to use. Empty means the first one in your account. |
 | `SAFETY_TEXT` | GPSR safety information sent with every book (Polish, plain text). |
 | `INVOICE` | Invoice type (`VAT`). |
+| `FOREIGN_MARKETPLACES` | `allegro-cz`, `allegro-sk`, `allegro-hu`: the additional marketplaces you sell on (see below). |
+| `FOREIGN_PRICES` | `auto`: Allegro converts the PLN price. `eur`: the script sends its own prices (`FOREIGN_EUR_RATE`). |
+| `FOREIGN_EUR_RATE` | CZK 25.0, EUR 1, HUF 395: only used with `FOREIGN_PRICES = "eur"`. |
+
+### allegro.cz, allegro.sk and allegro.hu (additional marketplaces)
+
+Allegro can show the same offer on its Czech, Slovak and Hungarian sites, with
+**one shared stock**. There's no extra listing: the offer created on
+allegro.pl is the one shown there.
+
+**When an offer appears there.** It appears on an additional marketplace when
+all of these are true:
+
+- **Delivery:** your shipping rates set has **a delivery method to that
+  country** (Sales Center → shipping rates). That is how you choose the
+  countries; no delivery method means no visibility.
+- **Product:** the offer is linked to a catalog product (always true here).
+- **Account:** you sell as a verified company.
+- **Category:** the category exists on that site.
+
+Title and description are translated by Allegro.
+
+**Prices.** By default (`FOREIGN_PRICES = "auto"`), Allegro converts the PLN
+price into CZK, EUR or HUF every business day (ECB rate, the "Przelicznik
+cen" rule). With `--foreign-prices eur`, the script sends its own prices in
+`additionalMarketplaces`, converted from the EUR source price. Allegro refuses
+a foreign price that is much lower than the converted PLN price
+(`VQR009_PRICE_IN_ADDITIONAL_MARKETPLACE_MISMATCH`).
+
+**Status.** `check` lists the marketplaces your account has. `status` shows
+per country whether each offer is `APPROVED`, `REFUSED` (with Allegro's
+reason) or `NOT_REQUESTED` (no delivery method to that country).
+
+**Orders** from these sites come through the same Allegro order API, so the
+stock sync sees them too.
 
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `auth` | One-time authorization with a device code. Saves the tokens. |
-| `check` | Shows your account, and the shipping rates, return policy, implied warranty and responsible producer that will be used. |
+| `check` | Shows your account, and the shipping rates, return policy, implied warranty and responsible producer that will be used, and the Allegro marketplaces with the ones you sell on marked. |
 | `lookup ISBN` | Shows whether Allegro's catalog knows a book, with its product and category. |
 | `push` | Creates, updates, ends or re-activates offers (see below). |
-| `status` | Shows each offer: ACTIVE or ENDED, PLN price, stock, and units sold in the last 30 days. |
+| `status` | Shows each offer: ACTIVE or ENDED, PLN price, stock, and units sold in the last 30 days, then per additional marketplace: APPROVED / REFUSED (with the reason) / NOT_REQUESTED and the price there. |
 
 ### `push`
 
@@ -143,6 +178,8 @@ python allegro_push.py push [json_file] [options]
 | `--resend` | off | Updates price and stock of books that were already pushed, when they changed. |
 | `--end-sold-out` | off | Ends pushed offers whose book is now `sold_out`. |
 | `--no-match-check` | off | Skips the catalog lookup. Unknown books are then rejected by Allegro instead. |
+| `--foreign-prices` | `FOREIGN_PRICES` | `auto` (Allegro converts) or `eur` (own CZK / EUR / HUF prices from the EUR price). |
+| `--marketplaces` | `FOREIGN_MARKETPLACES` | `cz,sk,hu`, `all` or `none`. Also for `check` and `status`. |
 | `--dry-run` | off | Writes `allegro_offers.json` and sends nothing. Without credentials, the lookups are skipped too. |
 | `--limit N` | `0` (all) | Creates at most N new offers. |
 | `--yes` | off | Skips the confirmation prompt. |
@@ -231,9 +268,9 @@ prints them, for example
   automatically. Prices include Polish VAT (books: 5%). Poland has no fixed
   book price law.
 - **One shipping rates set, return policy and warranty** for all books.
-- **Only the Polish site (allegro.pl).** Allegro can also show offers on
-  allegro.cz, allegro.sk and allegro.hu (*additional marketplaces*), but the
-  script doesn't use them.
+- **Additional marketplaces depend on your delivery settings.** The script
+  can't switch allegro.cz / .sk / .hu on or off per offer. Visibility follows
+  the delivery methods in your shipping rates set.
 - **Not verified:**
   - The condition parameter IDs (`11323`, `11323_1`, `11323_2`) for the books
     categories. They're settings, and Allegro's error names the parameter if
@@ -259,6 +296,9 @@ The fake implements:
 - the account settings lists and the catalog search by GTIN
 - offer creation, both `201` and `202` with operation polling
 - `PATCH`, the END / ACTIVATE commands and the offer list
+- `GET /marketplaces`, foreign prices checked per currency, an unsupported
+  marketplace refused, and per-marketplace publication states with refusal
+  reasons
 
 It applies the documented offer rules:
 - a catalog product, GPSR safety information and a responsible producer
