@@ -116,7 +116,7 @@ class FakeCdon:
                 "FULFILLED": [{"id": "D0", "article_sku": "OLD", "quantity": 1, "state": "FULFILLED",
                                "created_at": "2026-01-01T08:00:00Z", "updated_at": "2026-01-02T08:00:00Z"}],
                 "NOT_FULFILLED": [{"id": "D2", "article_sku": "SKU-E", "quantity": 1, "state": "NOT_FULFILLED",
-                                   "created_at": "2026-11-10T08:00:00Z", "updated_at": "2026-11-10T09:00:00Z"}]}[st]
+                                   "created_at": "2026-11-10T08:00:00Z", "updated_at": ss.iso(ss.utcnow())}]}[st]
         return 200, rows
 
 

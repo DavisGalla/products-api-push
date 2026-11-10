@@ -55,12 +55,14 @@ OVERLAP_MINUTES = 60       # re-read this window on every run (late updates, clo
 KEEP_DAYS = 60             # forget sales that no longer count after this many days
 DEFAULT_STOCK = 1          # stock of a book without a "stock"/"quantity" field
 TIMEOUT_MINUTES = 30       # per pusher run
+AUTO_ACCEPT = True         # accept orders that must be accepted (Mirakl, Cdiscount, eMAG) when stock covers them
 # ======================================================================
 
 DATA_DIR = Path(os.environ.get("STOCK_SYNC_DIR") or BASE)     # tests point this at a temporary folder
 LEDGER_FILE = DATA_DIR / "stock_ledger.json"
 SYNCED_FILE = DATA_DIR / "books_synced.json"
 CHANGES_FILE = DATA_DIR / "books_sync_changes.json"
+ORDERS_FILE = DATA_DIR / "orders_report.json"           # for the "New orders" section of push_all's email
 MIRAKL_SHOPS = ["casadellibro", "elcorteingles", "carrefour", "worten", "ibs", "empik", "leclerc"]
 EBAY_FULFILLMENT_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.fulfillment.readonly"
 
@@ -120,8 +122,9 @@ def has_env(*names):
     return all(os.environ.get(n) for n in names)
 
 
-def sale(channel, key, sku, qty, cancelled, at, ean=None):
-    """One order line. qty <= 0 (everything cancelled) is stored as cancelled."""
+def sale(channel, key, sku, qty, cancelled, at, ean=None, order=None, needs_accept=False):
+    """One order line. qty <= 0 (everything cancelled) is stored as cancelled.
+    order: the marketplace's order id; needs_accept: the order waits for the seller's acceptance."""
     try:
         qty = int(qty if qty not in (None, "") else 1)
     except (TypeError, ValueError):
@@ -130,6 +133,9 @@ def sale(channel, key, sku, qty, cancelled, at, ean=None):
          "cancelled": bool(cancelled) or qty <= 0, "at": iso(parse_time(at) or utcnow())}
     if ean:
         s["ean"] = str(ean)
+    if order is not None:
+        s["order"] = str(order)
+    s["needs_accept"] = bool(needs_accept) and not s["cancelled"]
     return s
 
 
@@ -170,8 +176,11 @@ def read_mirakl(shop, since):
             dead_order = o.get("order_state") in ("REFUSED", "CANCELED")
             for line in o.get("order_lines") or []:
                 dead = dead_order or line.get("order_line_state") in ("REFUSED", "CANCELED")
-                out.append(sale(shop, f"{shop}:{o.get('order_id')}:{line.get('order_line_id')}",
-                                line.get("offer_sku"), line.get("quantity"), dead, o.get("created_date")))
+                s = sale(shop, f"{shop}:{o.get('order_id')}:{line.get('order_line_id')}", line.get("offer_sku"),
+                         line.get("quantity"), dead, o.get("created_date"), order=o.get("order_id"),
+                         needs_accept=line.get("order_line_state") == "WAITING_ACCEPTANCE")
+                s["line_id"] = str(line.get("order_line_id"))
+                out.append(s)
         offset += len(orders)
         if not orders or offset >= int(data.get("total_count") or 0):
             return out
@@ -284,7 +293,8 @@ def read_cdiscount(since):
                 out.append(sale("cdiscount", f"cdiscount:{o.get('orderId')}:{line.get('orderLineId')}",
                                 offer.get("sellerProductId") or offer.get("sellerExternalReference"),
                                 line.get("quantity"), dead_order or line.get("status") in ("Cancelled", "Refused"),
-                                o.get("createdAt") or o.get("purchasedAt"), ean=offer.get("productGtin")))
+                                o.get("createdAt") or o.get("purchasedAt"), ean=offer.get("productGtin"),
+                                order=o.get("orderId"), needs_accept="WaitingAcceptance" in (o.get("status"), line.get("status"))))
         if len(orders) < 100:
             return out
         page += 1
@@ -342,7 +352,8 @@ def read_emag(since):
         for line in o.get("products") or []:
             pid = str(line.get("product_id"))
             out.append(sale("emag", f"emag:{o.get('id')}:{line.get('id')}", by_id.get(pid) or line.get("ext_part_number"),
-                            line.get("quantity"), dead or str(line.get("status")) == "0", o.get("date")))
+                            line.get("quantity"), dead or str(line.get("status")) == "0", o.get("date"),
+                            order=o.get("id"), needs_accept=str(o.get("status")) == "1"))
     return out
 
 
@@ -361,7 +372,8 @@ def read_cdon(since):
                      or (parse_time(o.get("updated_at")) or since) >= since]
             for o in fresh:                              # one order = one SKU (CDON)
                 out.append(sale("cdon", f"cdon:{o.get('id')}", o.get("article_sku"), o.get("quantity"),
-                                o.get("state") == "NOT_FULFILLED", o.get("created_at")))
+                                o.get("state") == "NOT_FULFILLED", o.get("created_at"), order=o.get("id"),
+                                needs_accept=o.get("state") == "CREATED"))
             # CDON has no date filter: stop when a page holds nothing new or is the last one
             if len(orders) < 1000 or (state not in ("CREATED", "ACCEPTED") and not fresh):
                 break
@@ -569,6 +581,118 @@ def compute(products, sales, snapshot):
     return synced, info
 
 
+# -------------------------------------------------------------------- orders
+
+def accept_order(channel, order_id, lines):
+    """Accept one order on its marketplace. Returns None (accepted) or an error text."""
+    import requests
+    if channel in MIRAKL_SHOPS:                          # Mirakl OR21: every waiting line of the order
+        api = importlib.import_module(f"{channel}_push").Mirakl()
+        body = {"order_lines": [{"accepted": True, "id": s["line_id"]} for s in lines]}
+        r = requests.put(f"{api.base}/api/orders/{order_id}/accept", json=body, timeout=60,
+                         headers=dict(api.headers, **{"Content-Type": "application/json"}),
+                         params={"shop_id": api.shop_id} if api.shop_id else None)
+        return None if r.status_code in (200, 204) else f"OR21 {r.status_code}: {r.text[:200]}"
+    if channel == "cdiscount":                           # Octopia: approval-status (Cdiscount channel)
+        api = importlib.import_module("cdiscount_push").Octopia()
+        r, data = api.call("POST", f"/orders/{order_id}/approval-status", body={"approval_status": "Accepted"})
+        return None if r.status_code in (200, 201, 204) else f"{r.status_code}: {str(data)[:200]}"
+    if channel == "emag":                                # eMAG: acknowledge = accept ("in progress")
+        api = importlib.import_module("emag_push").Emag()
+        ok, _, msgs = api.call(f"order/acknowledge/{order_id}", {})
+        return None if ok else "; ".join(msgs) or "acknowledge refused"
+    return "accept it in the marketplace's seller portal (no automatic accept for this marketplace)"
+
+
+def handle_orders(ledger, info, titles, snapshot, a):
+    """Which sales the stock covers (first come, first served), accept covered orders, flag double sales."""
+    sales = ledger["sales"]
+    by_sku = {}
+    for s in sales.values():
+        if not s["cancelled"] and counts(s, snapshot):
+            by_sku.setdefault(s["sku"], []).append(s)
+    for sku, rows in by_sku.items():
+        src = info.get(sku, (None,))[0]
+        used = 0
+        for s in sorted(rows, key=lambda x: (x["at"], x["key"])):
+            used += s["qty"]
+            s["oversold"] = src is None or used > src
+            if src is None:
+                s["note"] = "book not in the products file"
+    for s in sales.values():
+        if s["cancelled"]:
+            s.pop("oversold", None)
+    orders = {}
+    for s in sales.values():
+        if s.get("needs_accept") and not s.get("accepted_at") and not s["cancelled"] and s.get("order"):
+            orders.setdefault((s["channel"], s["order"]), []).append(s)
+    accepted = 0
+    for (channel, order_id), lines in sorted(orders.items()):
+        if any(s.get("oversold") for s in lines):
+            for s in lines:
+                print(f"   ! {channel} order {order_id}: {s['sku']} is a DOUBLE SALE (stock already sold) - "
+                      f"not accepted, decide by hand")
+            continue
+        if not AUTO_ACCEPT or channel not in MIRAKL_SHOPS + ["cdiscount", "emag"]:
+            for s in lines:
+                s["accept_error"] = "accept it in the marketplace's seller portal"
+            continue
+        if a.dry_run:
+            print(f"   (dry run) would accept {channel} order {order_id}")
+            continue
+        try:
+            err = accept_order(channel, order_id, lines)
+        except (Exception, SystemExit) as e:
+            err = str(e)
+        if err:
+            print(f"   ! {channel} order {order_id}: automatic accept failed: {err}")
+            for s in lines:
+                s["accept_error"] = err
+            continue
+        accepted += 1
+        for s in lines:
+            s["accepted_at"] = iso(utcnow())
+            s.pop("accept_error", None)
+        print(f"   accepted {channel} order {order_id} ({', '.join(s['sku'] for s in lines)})")
+    write_orders_report(ledger, titles)
+    return accepted
+
+
+def order_status(s):
+    if s["cancelled"]:
+        return "cancelled"
+    if s.get("oversold"):
+        return "DOUBLE SALE - stock already sold elsewhere; cancel or find a copy (not accepted)"
+    if s.get("accepted_at"):
+        return "accepted automatically"
+    if s.get("needs_accept"):
+        return "ACCEPT BY HAND: " + (s.get("accept_error") or "waiting for acceptance")
+    return "ok (no acceptance needed)"
+
+
+def write_orders_report(ledger, titles):
+    """New orders (not yet in an email) + everything that still needs a person."""
+    rows = []
+    for s in sorted(ledger["sales"].values(), key=lambda x: x["at"]):
+        needs_you = not s["cancelled"] and (s.get("oversold") or (s.get("needs_accept") and not s.get("accepted_at")))
+        if s.get("reported") and not needs_you:
+            continue
+        rows.append({"key": s["key"], "channel": s["channel"], "order": s.get("order") or s["key"].split(":")[1],
+                     "sku": s["sku"], "title": titles.get(s["sku"], ""), "qty": s["qty"], "at": s["at"],
+                     "status": order_status(s), "needs_you": bool(needs_you), "new": not s.get("reported")})
+    save_json(ORDERS_FILE, rows)
+
+
+def mark_reported(keys):
+    """Called by push_all after the email went out: these orders are no longer 'new'."""
+    import push_all
+    ledger = load_json(LEDGER_FILE, {})
+    for k in keys:
+        if k in ledger.get("sales", {}):
+            ledger["sales"][k]["reported"] = True
+    save_json(LEDGER_FILE, ledger)
+
+
 # ------------------------------------------------------------------- pushers
 
 def run_pushers(changed, synced, a):
@@ -670,8 +794,9 @@ def cmd_sync(a):
             elif not old["cancelled"] and s["cancelled"]:
                 cancelled += 1
                 print(f"   - {channel}: cancelled {s['sku']} ({s['key']}) -> stock back")
-            if old is None or old != s:
-                ledger["sales"][s["key"]] = s if old is None else dict(s, at=old["at"])
+            if old is None or any(old.get(k) != v for k, v in s.items() if k != "at"):
+                # keep our own flags (accepted_at, reported, oversold) and the first-seen time
+                ledger["sales"][s["key"]] = s if old is None else dict(old, **dict(s, at=old["at"]))
         new_sales += n_new
         ledger["cursors"][channel] = iso(start)
         if channel == "vinted":
@@ -685,6 +810,8 @@ def cmd_sync(a):
 
     synced, info = compute(products, ledger["sales"], snapshot)
     save_json(SYNCED_FILE, synced)
+    titles = {sku_of(p): p.get("title") or "" for p in products}
+    handle_orders(ledger, info, titles, snapshot, a)
     changed = {}
     for sku, (src, sold, avail) in info.items():
         before = ledger["sent"].get(sku, src)     # a book seen for the first time was pushed with its source stock

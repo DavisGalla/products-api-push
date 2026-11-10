@@ -626,6 +626,11 @@ bws run -- python stock_sync.py sync             # take sold copies down everywh
 python stock_sync.py status                      # sales that still count, stock sent
 ```
 
+The sync also handles the orders: Mirakl, Cdiscount and eMAG orders are
+accepted automatically when the stock covers them (a double sale never is),
+and the daily email gets an **Orders** section listing every new order, with
+the ones that need you (double sales, orders to accept by hand) first.
+
 ## Run everything and get an email report
 
 Credentials (Gmail and the marketplaces) are stored in **Bitwarden Secrets
@@ -786,6 +791,7 @@ python tests\test_cdon.py
 python tests\test_onbuy.py
 python tests\test_stock_sync.py
 python tests\test_order_readers.py
+python tests\test_orders.py
 python tests\test_push_all.py
 ```
 

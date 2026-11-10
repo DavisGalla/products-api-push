@@ -327,8 +327,50 @@ def subject_of(results, dry_run):
         bits.append(f"{problems} rejected")
     if failed:
         bits.append("failed: " + ", ".join(failed))
+    need = sum(1 for r in orders_rows() if r["needs_you"])
+    if need:
+        bits.append(f"{need} order(s) need you")
+        worst = "FAILED" if failed else "PROBLEMS"
     prefix = "[Product push DRY RUN]" if dry_run else "[Product push]"
     return f"{prefix} {worst} - " + ", ".join(bits)
+
+
+def orders_rows():
+    path = Path(os.environ.get("STOCK_SYNC_DIR") or BASE) / "orders_report.json"
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+
+
+def orders_text(rows):
+    if not rows:
+        return []
+    need = [r for r in rows if r["needs_you"]]
+    out = ["", f"ORDERS: {sum(1 for r in rows if r['new'])} new" + (f", {len(need)} NEED YOU" if need else "")]
+    for r in sorted(rows, key=lambda r: (not r["needs_you"], r["at"])):
+        flag = "!!" if r["needs_you"] else "  "
+        out.append(f"{flag} {r['at'][:16].replace('T', ' ')}  {r['channel']:<13} order {r['order']:<14} "
+                   f"{r['qty']} x {r['sku']} {r['title'][:40]}  -> {r['status']}")
+    return out
+
+
+def orders_html(rows):
+    if not rows:
+        return ""
+    need = sum(1 for r in rows if r["needs_you"])
+    trs = "".join(
+        f"<tr style='background:{'#fdecea' if r['needs_you'] else '#ffffff'}'>"
+        f"<td style='padding:4px 8px'>{html.escape(r['at'][:16].replace('T', ' '))}</td>"
+        f"<td style='padding:4px 8px'>{html.escape(r['channel'])}</td>"
+        f"<td style='padding:4px 8px'>{html.escape(str(r['order']))}</td>"
+        f"<td style='padding:4px 8px'>{r['qty']} x {html.escape(r['sku'])} {html.escape(r['title'][:50])}</td>"
+        f"<td style='padding:4px 8px'><b>{html.escape(r['status'])}</b></td></tr>"
+        for r in sorted(rows, key=lambda r: (not r["needs_you"], r["at"])))
+    return (f"<h3>Orders: {sum(1 for r in rows if r['new'])} new" + (f", <span style='color:#c0392b'>{need} need you</span>" if need else "")
+            + "</h3><table style='border-collapse:collapse' border='1' cellspacing='0'>"
+            "<tr><th>Time (UTC)</th><th>Marketplace</th><th>Order</th><th>Book</th><th>Status</th></tr>"
+            f"{trs}</table>")
 
 
 def text_report(results, started, dry_run):
@@ -343,6 +385,7 @@ def text_report(results, started, dry_run):
         if r["status"] == "FAILED" or (dry_run and r["tail"]):
             for line in r["tail"]:
                 out.append(f"{'':<{width}}    > {line.strip()}")
+    out += orders_text(orders_rows())
     out += ["", "Full output of every pusher is in the attached log."]
     return "\n".join(out)
 
@@ -366,6 +409,7 @@ def html_report(results, started, dry_run):
     return (f"<p>Product push {'<b>(DRY RUN)</b> ' if dry_run else ''}started {html.escape(started)}</p>"
             f"<table style='border-collapse:collapse' border='1' cellspacing='0'>"
             f"<tr><th>Marketplace</th><th>Result</th><th>Details</th></tr>{''.join(rows)}</table>"
+            f"{orders_html(orders_rows())}"
             f"<p>Full output of every pusher is in the attached log.</p>")
 
 
@@ -468,8 +512,9 @@ def main():
     print("\n" + "=" * 70 + "\n" + subject + "\n\n" + text)
 
     failed = any(r["status"] == "FAILED" for r in results)
+    reported = [r["key"] for r in orders_rows() if r["new"]]
     when = cfg.get("email", {}).get("when", "always")
-    trouble = failed or any(r["status"] == "PROBLEMS" for r in results)
+    trouble = failed or any(r["status"] == "PROBLEMS" for r in results) or any(r["needs_you"] for r in orders_rows())
     if a.no_email or (when == "problems" and not trouble):
         print("\n(no email sent)")
     else:
@@ -479,6 +524,9 @@ def main():
             to = send_email(subject, text, html_report(results, started, a.dry_run),
                             [("push_log.txt", combined)] if combined else [])
             print(f"\nReport emailed to {', '.join(to)}.")
+            if reported and not a.dry_run:                  # these orders were in an email: no longer "new"
+                import stock_sync
+                stock_sync.mark_reported(reported)
         except Exception as e:
             print(f"\nCould not send the report email: {e}")
             sys.exit(2)

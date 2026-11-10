@@ -101,6 +101,42 @@ yet: a book that sells on Amazon is taken down on bol.com too.
 - **Fnac and Vinted** have no sold-out option yet, so the sync reports them
   as `CANNOT SYNC`.
 
+## Orders: accept automatically, email report
+
+The orders the sync reads are also handled.
+
+**Who gets the copy.** For every book, the earliest orders get the available
+copies. A later order beyond the stock is a **DOUBLE SALE**. It is never
+accepted, and the email shows it so you can cancel it or find another copy.
+
+**Automatic accept** (`AUTO_ACCEPT = True`), only for orders the stock covers:
+
+| Marketplace | Call |
+|---|---|
+| Mirakl shops (Casa del Libro, El Corte Inglés, Carrefour, Worten, IBS.it, Empik, E.Leclerc) | OR21 `PUT /api/orders/{id}/accept`, every waiting line `accepted: true` |
+| Cdiscount (Octopia) | `POST /orders/{id}/approval-status` with `{"approval_status": "Accepted"}` |
+| eMAG | `order/acknowledge/{id}` (the order goes to "in progress") |
+
+An order whose lines aren't all covered is not accepted, since Mirakl
+requires a decision for every line. A failed accept is tried again on the
+next run, and is shown in the email until it works.
+
+**By hand:**
+
+- **CDON:** orders need accepting, but the accept call isn't built yet.
+- **Fnac and AbeBooks:** their orders aren't read yet.
+
+**Email.** `stock_sync.py` writes `orders_report.json`, and push_all adds an
+**Orders** section to the report. It lists every new order (marketplace,
+order, book, status), with the ones that need you first and in red. Those
+are double sales, orders to accept by hand, and failed accepts. The subject
+then says "N order(s) need you", and the email is sent even with
+`"when": "problems"`.
+
+**Clearing the list.** Orders are marked as reported only after the email was
+actually sent. Orders that still need you stay in every email until they're
+handled or cancelled.
+
 ## Setup
 
 1. **Credentials:** the sync uses the pushers' own credentials (Bitwarden /
@@ -128,6 +164,7 @@ yet: a book that sells on Amazon is taken down on bol.com too.
    | `OVERLAP_MINUTES` | 60 | Window read again on every run |
    | `KEEP_DAYS` | 60 | Old sales are dropped from the ledger after this |
    | `DEFAULT_STOCK` | 1 | Stock of a book without a stock field |
+| `AUTO_ACCEPT` | `True` | Accept Mirakl / Cdiscount / eMAG orders automatically when the stock covers them |
 
 ## Commands
 
@@ -166,8 +203,9 @@ schtasks /Create /SC MINUTE /MO 15 /TN "Stock sync" /TR "cmd /c cd /d C:\program
 | `stock_ledger.json` | Per channel, the time orders were read up to; every order line (SKU, quantity, cancelled, time); the stock each book last has on the marketplaces |
 | `books_synced.json` | `books.json` with our sales taken off |
 | `books_sync_changes.json` | Only the books whose stock changed in the last run (what the pushers got) |
+| `orders_report.json` | New orders and the ones that need you, for push_all's email |
 
-All three are in `.gitignore`. **Don't delete `stock_ledger.json`**: the
+All four are in `.gitignore`. **Don't delete `stock_ledger.json`**: the
 sync would forget which sales were already counted.
 
 ## Limitations
@@ -223,3 +261,20 @@ and Fruugo is read over HTTP from a local XML mock. It checks:
 - that a bol.com sale (EAN only) takes the right book down
 
 There are 27 checks.
+
+```powershell
+python tests\test_orders.py
+```
+
+This test covers order handling. It uses a local Mirakl mock for the real
+OR21 call, and fakes for Cdiscount and eMAG. It checks:
+
+- the automatic accept, and that a double sale is never accepted
+- eMAG's acknowledge
+- CDON flagged for acceptance by hand
+- a failed accept that's retried
+- the dry run
+- the email section and subject
+- marking orders as reported after the email
+
+There are 12 checks.
