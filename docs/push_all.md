@@ -132,6 +132,7 @@ with our sales taken off). It appears as **Stock sync** in the report.
 |---|---|
 | `json_file` | Products file passed to every pusher. A relative path is relative to this folder. |
 | `timeout_minutes` | A pusher that runs longer than this is killed and reported as `FAILED`. You can also set it per pusher. |
+| `log_keep_days` | Run folders in `logs/` older than this are deleted at the start of each run (default 60). Other folders in `logs/` are never touched. |
 | `email.to` | Report recipients. The `REPORT_TO` variable overrides it. The default is `GMAIL_ADDRESS`. |
 | `email.when` | `always` sends a report after every run. `problems` sends one only when something was rejected or failed. |
 | `pushers.<name>.enabled` | Whether this pusher is part of a normal run. |

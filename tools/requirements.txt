@@ -1,0 +1,1 @@
+reportlab>=4.0   # only for the PDF builders in tools/

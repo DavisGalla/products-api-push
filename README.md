@@ -1,5 +1,7 @@
 # Product pushers
 
+[![tests](https://github.com/DavisGalla/products-api-push/actions/workflows/tests.yml/badge.svg)](https://github.com/DavisGalla/products-api-push/actions/workflows/tests.yml)
+
 Push a JSON file of products to marketplaces through their official APIs:
 
 | Script | Marketplace | Auth | Docs |
@@ -762,6 +764,18 @@ push your whole catalogue, try one item at a time:
 
 ## Tests
 
+Run every suite at once (one summary line per suite, exit code 1 if anything
+fails). This is also what GitHub runs on every push, on Windows and Ubuntu
+(`.github/workflows/tests.yml`, the badge at the top):
+
+```powershell
+pip install -r requirements.txt
+python tests\run_all.py              # all suites
+python tests\run_all.py ebay cdon    # only these
+```
+
+Or a single suite:
+
 ```powershell
 python tests\test_vinted_api.py
 python tests\test_ebay.py
@@ -802,3 +816,18 @@ fake pushers and a fake mail server on `127.0.0.1:8766`.
 `test_galaxus.py` instead runs a local SFTP server on a free port and needs
 `pip install paramiko`. `test_fruugo.py` runs a local web server and SFTP server on free
 ports (its SFTP part also needs paramiko).
+
+## Rebuilding the PDFs
+
+`docs/product_pushers_architecture.pdf`, `docs/marketplace_capabilities.pdf`
+and `docs/capabilities.md` are generated. Their texts and table data live in
+`tools/`; change them there and rebuild:
+
+```powershell
+pip install -r tools\requirements.txt
+python tools\build_capabilities.py   # docs/marketplace_capabilities.pdf + docs/capabilities.md
+python tools\build_pdf.py            # docs/product_pushers_architecture.pdf
+```
+
+On Windows they use Segoe UI (as the committed PDFs); on Linux DejaVu Sans
+(`sudo apt install fonts-dejavu-core`).

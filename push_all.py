@@ -40,6 +40,7 @@ BASE = Path(__file__).resolve().parent
 CONFIG_FILE = BASE / "push_all_config.json"
 ENV_FILE = Path(os.environ.get("PUSHERS_ENV_FILE") or BASE / ".env")
 LOG_DIR = BASE / "logs"
+LOG_KEEP_DAYS = 60       # logs/<date_time> folders older than this are deleted (config: "log_keep_days")
 LOCK_FILE = BASE / "push_all.lock"
 LOCK_MAX_AGE = 6 * 3600  # an older lock is treated as left over from a crash
 
@@ -168,6 +169,26 @@ def load_config():
         sys.exit(f"Unknown pusher(s) in {CONFIG_FILE.name}: {', '.join(sorted(unknown))}. "
                  f"Known: {', '.join(PUSHERS)}")
     return cfg
+
+
+def prune_logs(keep_days):
+    """Delete logs/<YYYY-mm-dd_HHMMSS> run folders older than keep_days. Nothing else is touched."""
+    import shutil
+    if not keep_days or not LOG_DIR.is_dir():
+        return 0
+    cutoff = time.time() - float(keep_days) * 86400
+    removed = 0
+    for d in LOG_DIR.iterdir():
+        if not d.is_dir() or not re.fullmatch(r"\d{4}-\d{2}-\d{2}_\d{6}", d.name):
+            continue
+        try:
+            started = time.mktime(time.strptime(d.name, "%Y-%m-%d_%H%M%S"))
+        except ValueError:
+            continue
+        if started < cutoff:
+            shutil.rmtree(d, ignore_errors=True)
+            removed += 1
+    return removed
 
 
 def take_lock():
@@ -485,6 +506,9 @@ def main():
     take_lock()
     try:
         started = time.strftime("%Y-%m-%d %H:%M:%S")
+        pruned = prune_logs(cfg.get("log_keep_days", LOG_KEEP_DAYS))
+        if pruned:
+            print(f"(removed {pruned} log folder(s) older than {cfg.get('log_keep_days', LOG_KEEP_DAYS)} days)")
         log_dir = LOG_DIR / time.strftime("%Y-%m-%d_%H%M%S")
         log_dir.mkdir(parents=True, exist_ok=True)
         results = []

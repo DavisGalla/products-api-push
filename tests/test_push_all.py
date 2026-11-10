@@ -225,6 +225,13 @@ def test_push_all():
         check("a second run at the same time is refused", rc != 0 and "in progress" in out, out[-300:])
         (tmp / "push_all.lock").unlink()
 
+        old_log = tmp / "logs" / "2020-01-01_000000"
+        old_log.mkdir(parents=True)
+        (tmp / "logs" / "keep-me").mkdir()
+        rc, out = run(tmp, "--only", "vinted", "--no-email")
+        check("log folders older than 60 days are deleted, other folders kept",
+              not old_log.exists() and (tmp / "logs" / "keep-me").exists() and "removed 1 log folder" in out, out[-300:])
+
         rc, out = run(tmp, "--only", "nosuch")
         check("unknown pusher name is rejected", rc != 0 and "Unknown pusher" in out, out[-300:])
 

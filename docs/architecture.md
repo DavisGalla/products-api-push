@@ -248,11 +248,16 @@ credentials, and doesn't contact any real API:
 | `test_stock_sync.py` | Order APIs: Mirakl OR11, Amazon Orders v2026-01-01, eBay Fulfillment, Kaufland order units; ledger, cancellations, settle rule, pusher commands, push_all integration | 26 |
 | `test_order_readers.py` | Order readers for bol.com, Cdiscount, Allegro, OTTO, eMAG, CDON, OnBuy, booklooker, Fruugo, Vinted, Temu, TikTok (filters, paging, SKU/EAN mapping, cancellations) | 27 |
 | `test_orders.py` | Order handling: automatic accept (Mirakl OR21 mock, Cdiscount, eMAG), double sales, by-hand orders, email Orders section | 12 |
-| `test_push_all.py` | Fake pushers + fake mail server | 24 |
-| **Total** | | **696, all passing** |
+| `test_push_all.py` | Fake pushers + fake mail server (incl. log cleanup) | 25 |
+| **Total** | | **697, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.
+
+`python tests/run_all.py` runs every suite with one summary. GitHub Actions
+(`.github/workflows/tests.yml`) runs it on every push and pull request, on
+Windows and on Ubuntu, so a change that breaks something shows up as a red
+badge in the README. The PDF generators are in `tools/`.
 
 ## Current status
 
