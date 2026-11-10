@@ -609,9 +609,10 @@ python onbuy_push.py status                   # price, stock, buy box
 ## Stop double sales (stock sync)
 
 The same copy is listed on many marketplaces. `stock_sync.py` reads new
-orders from the Mirakl shops, Amazon, eBay and Kaufland. Every other
-marketplace then gets stock 0 for the sold book, and the stock comes back
-when an order is cancelled. Run it every 15 minutes; `push_all.py` also runs
+orders from 22 of them: the Mirakl shops, Amazon, eBay, Kaufland, bol.com,
+Cdiscount, Allegro, OTTO, eMAG, CDON, OnBuy, booklooker, Fruugo, Vinted,
+Temu and TikTok Shop. Every other marketplace then gets stock 0 for the sold
+book, and the stock comes back when an order is cancelled. Run it every 15 minutes; `push_all.py` also runs
 it first when `"stock_sync": {"enabled": true}` is set. See
 [docs/stock_sync.md](docs/stock_sync.md).
 
@@ -780,6 +781,7 @@ python tests\test_fruugo.py
 python tests\test_cdon.py
 python tests\test_onbuy.py
 python tests\test_stock_sync.py
+python tests\test_order_readers.py
 python tests\test_push_all.py
 ```
 

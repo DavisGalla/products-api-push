@@ -37,7 +37,7 @@ No marketplace has been tested with real seller accounts yet. The table is based
 
 ## Suggested next steps to manage sales
 
-- **Stop double sales (built).** **stock_sync.py** reads new orders from the Mirakl shops, Amazon, eBay and Kaufland every 15 minutes and sets the sold book's stock to 0 on every other marketplace; cancelled orders give the stock back. Next: order readers for the remaining marketplaces, and a sold-out option for Fnac and Vinted.
+- **Stop double sales (built).** **stock_sync.py** reads new orders from 22 marketplaces every 15 minutes and sets the sold book's stock to 0 on every other marketplace; cancelled orders give the stock back. Still to add: order readers for AbeBooks, Fnac, AliExpress and Galaxus, and a sold-out option for Fnac and Vinted.
 - **One list of all sales.** Collect new orders from every marketplace into one place, and add them to the daily email (or more often): what sold, where, price, buyer address.
 - **Auto-accept orders.** Mirakl shops, Fnac, AbeBooks, Cdiscount and eMAG require accepting each order. If it isn't accepted in time, the order is cancelled and the shop's rating drops. This can be automatic when the book is in stock.
 - **Shipping.** Send the tracking numbers back to each marketplace automatically. Packing and taking parcels to the carrier stays manual.

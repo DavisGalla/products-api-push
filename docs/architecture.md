@@ -80,7 +80,7 @@ stored in the code, the repository, or the configuration.
 | Scraper (separate project) | Produces `books.json`: id, title, price, ISBN, condition, images, stock | Python |
 | `push_all_config.json` | Which pushers run, their options, products file, report recipients, timeouts | JSON, not in git |
 | **`push_all.py`** | Runs the pushers one after another, counts results, writes logs, sends the email, prevents overlapping runs | Python standard library only |
-| **`stock_sync.py`** | Stops double sales: reads new orders (Mirakl ×7, Amazon, eBay, Kaufland), keeps one stock ledger, writes `books_synced.json`, runs every pusher with its sold-out option for the books whose stock changed. Every 15 minutes and at the start of `push_all.py` | Python + the pushers' API clients |
+| **`stock_sync.py`** | Stops double sales: reads new orders from 22 marketplaces, keeps one stock ledger, writes `books_synced.json`, runs every pusher with its sold-out option for the books whose stock changed. Every 15 minutes and at the start of `push_all.py` | Python + the pushers' API clients |
 | 26 pushers (`*_push.py`) | One per marketplace: validate products, match the catalog, create or update listings, record what was pushed | Python + `requests` (Vinted: standard library) |
 | State files (`*_posted.json`) | Per marketplace, what has already been pushed, so re-runs don't duplicate | JSON, local, not in git |
 | Bitwarden Secrets Manager + `bws` | Stores all credentials and injects them as environment variables at start-up | Bitwarden cloud, `bws` 2.1.0 |
@@ -246,8 +246,9 @@ credentials, and doesn't contact any real API:
 | `test_cdon.py` | CDON merchant API (Basic auth, bulk create/update with limits, market currencies, asynchronous batch and SKU statuses, sku_already_exists, categories, 429) | 26 |
 | `test_onbuy.py` | OnBuy API v2 (token renewal, barcode search in 50s, batch listings with per-row errors, by-sku update/delete, several sites, check-winning, 429) | 21 |
 | `test_stock_sync.py` | Order APIs: Mirakl OR11, Amazon Orders v2026-01-01, eBay Fulfillment, Kaufland order units; ledger, cancellations, settle rule, pusher commands, push_all integration | 26 |
+| `test_order_readers.py` | Order readers for bol.com, Cdiscount, Allegro, OTTO, eMAG, CDON, OnBuy, booklooker, Fruugo, Vinted, Temu, TikTok (filters, paging, SKU/EAN mapping, cancellations) | 27 |
 | `test_push_all.py` | Fake pushers + fake mail server | 24 |
-| **Total** | | **650, all passing** |
+| **Total** | | **677, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.
@@ -257,7 +258,7 @@ fields, limits, error codes, and asynchronous processing.
 | Part | Status |
 |---|---|
 | All 26 pushers | Built and passing their tests. **Not yet run against the real marketplaces**, because there are no seller accounts or API credentials yet. |
-| Stock sync (stop double sales) | Built and tested against mocks: order readers for Mirakl ×7, Amazon, eBay, Kaufland; stock 0 on every marketplace with a sold-out option. Not yet run against real order APIs. |
+| Stock sync (stop double sales) | Built and tested against mocks: order readers for 22 marketplaces (not yet AbeBooks, Fnac, AliExpress, Galaxus); stock 0 on every marketplace with a sold-out option. Not yet run against real order APIs. |
 | Runner + email report | Built and tested. **Verified for real on 2026-11-05**: credentials from Bitwarden, test email and dry-run report delivered through Gmail. |
 | Bitwarden Secrets Manager | Set up and working (project, machine account, token, `bws` 2.1.0). |
 | Server | Not yet deployed. The commands and steps are documented. |

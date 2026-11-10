@@ -9,7 +9,9 @@ This script:
   1. reads new orders from the marketplaces' order APIs (since the last run):
        Mirakl (Casa del Libro, El Corte Ingles, Carrefour, Worten, IBS.it,
        Empik, E.Leclerc), Amazon (Orders API v2026-01-01), eBay (Fulfillment
-       API) and Kaufland (order units, every storefront);
+       API), Kaufland (order units, every storefront), bol.com, Cdiscount
+       (Octopia), Allegro, OTTO, eMAG, CDON, OnBuy, booklooker, Fruugo,
+       Vinted Pro, Temu and TikTok Shop;
   2. keeps a ledger of these sales (stock_ledger.json). A cancelled or refused
      order gives its stock back;
   3. computes the stock left per book: the source stock from books.json minus
@@ -118,9 +120,36 @@ def has_env(*names):
     return all(os.environ.get(n) for n in names)
 
 
-def sale(channel, key, sku, qty, cancelled, at):
-    return {"key": key, "channel": channel, "sku": str(sku or ""), "qty": int(qty or 1),
-            "cancelled": bool(cancelled), "at": iso(parse_time(at) or utcnow())}
+def sale(channel, key, sku, qty, cancelled, at, ean=None):
+    """One order line. qty <= 0 (everything cancelled) is stored as cancelled."""
+    try:
+        qty = int(qty if qty not in (None, "") else 1)
+    except (TypeError, ValueError):
+        qty = 1
+    s = {"key": key, "channel": channel, "sku": str(sku or ""), "qty": max(qty, 1),
+         "cancelled": bool(cancelled) or qty <= 0, "at": iso(parse_time(at) or utcnow())}
+    if ean:
+        s["ean"] = str(ean)
+    return s
+
+
+def to_gtin(code):
+    """ISBN-10/13 or EAN -> 13-digit GTIN, or None."""
+    c = str(code or "").replace("-", "").replace(" ", "").upper()
+    digit = lambda core: str((10 - sum(int(d) * (1 if i % 2 == 0 else 3) for i, d in enumerate(core)) % 10) % 10)
+    if len(c) == 10 and c[:9].isdigit() and (c[9].isdigit() or c[9] == "X"):
+        return "978" + c[:9] + digit("978" + c[:9])
+    if len(c) == 13 and c.isdigit() and digit(c[:12]) == c[12]:
+        return c
+    return None
+
+
+def state_file(name):
+    """A pusher's state file (they live in the folder the pushers run in)."""
+    return load_json(Path(name), {})
+
+
+LEDGER = {}        # the ledger of the current run, for readers that page by order id (Vinted)
 
 
 # --------------------------------------------------------------------- readers
@@ -216,6 +245,266 @@ def read_kaufland(since):
     return out
 
 
+def read_bol(since):
+    mod = importlib.import_module("bol_push")
+    api = mod.Bol()
+    recent = utcnow() - since < timedelta(minutes=55)
+    # bol: change-interval-minute (max 60) for frequent runs; latest-change-date (a day) after a gap
+    base = {"status": "ALL", "fulfilment-method": "ALL"}
+    base.update({"change-interval-minute": 60} if recent else {"latest-change-date": since.strftime("%Y-%m-%d")})
+    out, page = [], 1
+    while True:
+        code, data = api.call("GET", "/retailer/orders", media=mod.RETAILER_V10, params=dict(base, page=page))
+        if code != 200:
+            raise RuntimeError(f"orders failed ({code}): {str(data)[:200]}")
+        orders = data.get("orders") or []
+        for o in orders:
+            for it in o.get("orderItems") or []:
+                qty = int(it.get("quantity") or 1) - int(it.get("quantityCancelled") or 0)
+                out.append(sale("bol", f"bol:{o.get('orderId')}:{it.get('orderItemId')}", None, qty, qty <= 0,
+                                o.get("orderPlacedDateTime"), ean=it.get("ean")))
+        if len(orders) < 50:
+            return out
+        page += 1
+
+
+def read_cdiscount(since):
+    mod = importlib.import_module("cdiscount_push")
+    api = mod.Octopia()
+    out, page = [], 1
+    while True:
+        r, data = api.call("GET", "/orders", params={"updatedAtMin": iso(since), "pageSize": 100, "pageIndex": page})
+        if r.status_code != 200:
+            raise RuntimeError(f"orders failed ({r.status_code}): {str(data)[:200]}")
+        orders = data.get("items") or []
+        for o in orders:
+            dead_order = o.get("status") in ("Cancelled", "Refused", "Rejected")
+            for line in o.get("lines") or []:
+                offer = line.get("offer") or {}
+                out.append(sale("cdiscount", f"cdiscount:{o.get('orderId')}:{line.get('orderLineId')}",
+                                offer.get("sellerProductId") or offer.get("sellerExternalReference"),
+                                line.get("quantity"), dead_order or line.get("status") in ("Cancelled", "Refused"),
+                                o.get("createdAt") or o.get("purchasedAt"), ean=offer.get("productGtin")))
+        if len(orders) < 100:
+            return out
+        page += 1
+
+
+def read_allegro(since):
+    mod = importlib.import_module("allegro_push")
+    api = mod.Allegro()
+    out, offset = [], 0
+    while offset < 10000:                               # Allegro: offset + limit <= 10 000
+        data = api.get("/order/checkout-forms", [("updatedAt.gte", iso(since)), ("limit", 100), ("offset", offset)])
+        forms = data.get("checkoutForms") or []
+        for f in forms:
+            dead = f.get("status") == "CANCELLED"
+            for li in f.get("lineItems") or []:
+                offer = li.get("offer") or {}
+                out.append(sale("allegro", f"allegro:{f.get('id')}:{li.get('id')}",
+                                (offer.get("external") or {}).get("id"), li.get("quantity"), dead,
+                                li.get("boughtAt") or f.get("updatedAt")))
+        if len(forms) < 100:
+            return out
+        offset += 100
+    return out
+
+
+def read_otto(since):
+    mod = importlib.import_module("otto_push")
+    mod.SCOPES = "orders"                                # the Orders interface needs its own token scope
+    api = mod.Otto()
+    out, path, params = [], "/v4/orders", {"fromDate": iso(since), "limit": 128}
+    while path:
+        code, data = api.call("GET", path, params=params)
+        if code != 200:
+            raise RuntimeError(f"orders failed ({code}): {str(data)[:200]}")
+        for o in data.get("resources") or []:
+            for item in o.get("positionItems") or []:     # one position item = one copy
+                out.append(sale("otto", f"otto:{item.get('positionItemId')}", (item.get("product") or {}).get("sku"),
+                                1, str(item.get("fulfillmentStatus") or "").startswith("CANCELLED"),
+                                o.get("orderDate")))
+        nxt = next((l.get("href") for l in data.get("links") or [] if l.get("rel") == "next"), None)
+        path, params = nxt, None
+    return out
+
+
+def read_emag(since):
+    mod = importlib.import_module("emag_push")
+    api = mod.Emag()
+    by_id = {str(v): k for k, v in state_file("emag_ids.json").items()}
+    # eMAG times are local (Bucharest) without a zone: read a wider window; max one month
+    start = max(since - timedelta(hours=3), utcnow() - timedelta(days=28))
+    fmt = lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S")
+    out = []
+    for o in api.read_all("order/read", {"modifiedAfter": fmt(start), "modifiedBefore": fmt(utcnow() + timedelta(hours=3))}):
+        dead = str(o.get("status")) == "0"
+        for line in o.get("products") or []:
+            pid = str(line.get("product_id"))
+            out.append(sale("emag", f"emag:{o.get('id')}:{line.get('id')}", by_id.get(pid) or line.get("ext_part_number"),
+                            line.get("quantity"), dead or str(line.get("status")) == "0", o.get("date")))
+    return out
+
+
+def read_cdon(since):
+    mod = importlib.import_module("cdon_push")
+    api = mod.Cdon()
+    out = []
+    for state in ("CREATED", "ACCEPTED", "FULFILLED", "NOT_FULFILLED"):
+        page = 1
+        while page <= 20:
+            code, data = api.call("GET", "v1/orders", params={"state": state, "limit": 1000, "page": page})
+            if code != 200:
+                raise RuntimeError(f"orders ({state}) failed ({code}): {str(data)[:200]}")
+            orders = data if isinstance(data, list) else (data or {}).get("orders") or []
+            fresh = [o for o in orders if state in ("CREATED", "ACCEPTED")
+                     or (parse_time(o.get("updated_at")) or since) >= since]
+            for o in fresh:                              # one order = one SKU (CDON)
+                out.append(sale("cdon", f"cdon:{o.get('id')}", o.get("article_sku"), o.get("quantity"),
+                                o.get("state") == "NOT_FULFILLED", o.get("created_at")))
+            # CDON has no date filter: stop when a page holds nothing new or is the last one
+            if len(orders) < 1000 or (state not in ("CREATED", "ACCEPTED") and not fresh):
+                break
+            page += 1
+    return out
+
+
+def read_onbuy(since):
+    mod = importlib.import_module("onbuy_push")
+    api = mod.OnBuy()
+    codes = {k.split(":", 1)[0] for k in state_file("onbuy_posted.json")} | {c.lower() for c in mod.SITES}
+    out = []
+    for code in sorted(c for c in codes if c in mod.SITE_TABLE):
+        params = {"site_id": mod.SITE_TABLE[code][0], "filter[status]": "all",
+                  "filter[modified_since]": (since - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")}
+        for o in api.pages("orders", params):
+            dead = "cancel" in str(o.get("status") or "").lower()
+            for n, prod in enumerate(o.get("products") or []):
+                ref = prod.get("onbuy_internal_reference") or n
+                out.append(sale("onbuy", f"onbuy:{o.get('order_id')}:{ref}", prod.get("sku"), prod.get("quantity"),
+                                dead, o.get("date")))
+    return out
+
+
+def read_booklooker(since):
+    mod = importlib.import_module("booklooker_push")
+    api = mod.Booklooker()
+    start = max(since.date(), (utcnow() - timedelta(days=28)).date())   # one month at most per call
+    orders = api.call("GET", "order", {"dateFrom": start.isoformat(), "dateTo": utcnow().date().isoformat()}) or []
+    out = []
+    for o in orders if isinstance(orders, list) else []:
+        dead_order = str(o.get("status") or "").upper().startswith("CANCEL")
+        for it in o.get("orderItems") or []:
+            out.append(sale("booklooker", f"booklooker:{o.get('orderId')}:{it.get('orderItemId')}", it.get("orderNo"),
+                            it.get("amount"), dead_order or str(it.get("status")) == "Canceled",
+                            f"{o.get('orderDate', '')}T{o.get('orderTime') or '00:00:00'}Z"))
+    return out
+
+
+FRUUGO_ORDERS_URL = "https://www.fruugo.com/orders/download"
+
+
+def read_fruugo(since):
+    import base64
+    import urllib.request
+    import xml.etree.ElementTree as ET
+    url = (os.environ.get("FRUUGO_ORDERS_URL") or FRUUGO_ORDERS_URL) + "?from=" + iso(since)
+    auth = base64.b64encode(f"{os.environ['FRUUGO_USERNAME']}:{os.environ['FRUUGO_PASSWORD']}".encode()).decode()
+    req = urllib.request.Request(url, headers={"Authorization": f"Basic {auth}", "User-Agent": "product-pushers/1.0"})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        root = ET.fromstring(r.read())
+    ns = {"o": "https://www.fruugo.com/orders/schema"}
+    out = []
+    for o in root.findall("o:order", ns):
+        oid, at = o.findtext("o:orderId", "", ns), o.findtext("o:orderDate", "", ns)
+        for line in o.findall("o:orderLines/o:orderLine", ns):
+            total = int(line.findtext("o:totalNumberOfItems", "1", ns) or 1)
+            cancelled = int(line.findtext("o:cancelledItems", "0", ns) or 0)
+            out.append(sale("fruugo", f"fruugo:{oid}:{line.findtext('o:fruugoSkuId', '', ns)}",
+                            line.findtext("o:skuId", "", ns) or line.findtext("o:productId", "", ns),
+                            total - cancelled, total - cancelled <= 0, at))
+    return out
+
+
+def read_vinted(since):
+    mod = importlib.import_module("vinted_api_push")
+    api = mod.VintedPro(os.environ["VINTED_PRO_TOKEN"])
+    known = {k.split(":")[1]: s for k, s in LEDGER.get("sales", {}).items() if k.startswith("vinted:")}
+    recent = [int(i) for i, s in known.items() if parse_time(s["at"]) > utcnow() - timedelta(days=14) and i.isdigit()]
+    after = min(recent) - 1 if recent else int(LEDGER.get("vinted_after_id") or 0)
+    out, newest = [], after
+    while True:
+        code, data = api.request("GET", f"/api/v1/orders?after-id={after}")
+        if code != 200:
+            raise RuntimeError(f"orders failed ({code}): {str(data)[:200]}")
+        orders = (data or {}).get("orders") or []
+        for o in orders:
+            oid = str(o.get("id"))
+            dead = o.get("status") == "CANCELED"
+            mine = [s for k, s in LEDGER.get("sales", {}).items() if k.startswith(f"vinted:{oid}:")]
+            if mine:                                     # known order: only its status can change
+                out += [dict(s, cancelled=dead) for s in mine]
+                continue
+            dcode, detail = api.request("GET", f"/api/v1/orders/{oid}")
+            if dcode != 200:
+                raise RuntimeError(f"order {oid} failed ({dcode}): {str(detail)[:200]}")
+            for n, item in enumerate((detail or {}).get("items") or []):
+                out.append(sale("vinted", f"vinted:{oid}:{item.get('id') or n}", item.get("item_reference"), 1,
+                                dead, o.get("created_at") or (detail or {}).get("created_at")))
+        if not orders:
+            break
+        after = max(int(o.get("id")) for o in orders)
+        newest = max(newest, after)
+    LEDGER["vinted_after_id"] = max(int(LEDGER.get("vinted_after_id") or 0), newest)
+    return out
+
+
+def read_temu(since):
+    mod = importlib.import_module("temu_push")
+    api = mod.Temu()
+    by_sku_id = {str(v.get("sku_id")): k for k, v in state_file("temu_posted.json").items() if v.get("sku_id")}
+    out, page = [], 1
+    while True:
+        res = api.call("bg.order.list.v2.get", pageNumber=page, pageSize=100,
+                       updateAtStart=int(since.timestamp()), updateAtEnd=int(utcnow().timestamp()))
+        items = res.get("pageItems") or []
+        for it in items:
+            parent = (it.get("parentOrderMap") or {}).get("parentOrderSn")
+            for o in it.get("orderList") or []:
+                ext = next((p.get("extCode") for p in o.get("productList") or [] if p.get("extCode")), None)
+                qty = int(o.get("quantity") or 1) - int(o.get("canceledQuantityBeforeShipment") or 0)
+                ts = o.get("orderCreateTime")
+                at = iso(datetime.fromtimestamp(int(ts) / (1000 if int(ts) > 10 ** 11 else 1), timezone.utc)) if ts else None
+                out.append(sale("temu", f"temu:{parent}:{o.get('orderSn')}", ext or by_sku_id.get(str(o.get("skuId"))),
+                                qty, qty <= 0 or bool(o.get("isCancelledDuringPending")), at))
+        if len(items) < 100:
+            return out
+        page += 1
+
+
+def read_tiktok(since):
+    mod = importlib.import_module("tiktok_push")
+    api = mod.TikTok()
+    by_seller = {v.get("seller_sku"): k for k, v in state_file("tiktok_posted.json").items() if v.get("seller_sku")}
+    out, token = [], None
+    while True:
+        query = {"page_size": 100, "sort_field": "update_time"}
+        if token:
+            query["page_token"] = token
+        data = api.call("POST", "/order/202309/orders/search", query=query,
+                        body={"update_time_ge": int(since.timestamp())})
+        for o in data.get("orders") or []:
+            dead = o.get("status") == "CANCELLED"
+            at = iso(datetime.fromtimestamp(int(o.get("create_time") or 0), timezone.utc)) if o.get("create_time") else None
+            for li in o.get("line_items") or []:        # TikTok: one line item per copy
+                ss = li.get("seller_sku")
+                out.append(sale("tiktok", f"tiktok:{o.get('id')}:{li.get('id')}", by_seller.get(ss, ss), 1,
+                                dead or li.get("display_status") == "CANCELLED", at))
+        token = data.get("next_page_token")
+        if not token:
+            return out
+
+
 def readers():
     """(channel, reader function, required env vars)."""
     out = [(shop, (lambda s: lambda since: read_mirakl(s, since))(shop),
@@ -224,6 +513,12 @@ def readers():
                                      "AMAZON_SELLER_ID"]),
             ("ebay", read_ebay, ["EBAY_CLIENT_ID", "EBAY_CLIENT_SECRET", "EBAY_REFRESH_TOKEN"]),
             ("kaufland", read_kaufland, ["KAUFLAND_CLIENT_KEY", "KAUFLAND_SECRET_KEY"])]
+    import push_all
+    more = [("bol", read_bol), ("cdiscount", read_cdiscount), ("allegro", read_allegro), ("otto", read_otto),
+            ("emag", read_emag), ("cdon", read_cdon), ("onbuy", read_onbuy), ("booklooker", read_booklooker),
+            ("vinted", read_vinted), ("temu", read_temu), ("tiktok", read_tiktok)]
+    out += [(name, fn, list(push_all.PUSHERS[name]["env"])) for name, fn in more]
+    out.append(("fruugo", read_fruugo, ["FRUUGO_USERNAME", "FRUUGO_PASSWORD"]))
     return out
 
 
@@ -337,6 +632,13 @@ def cmd_sync(a):
     ledger.setdefault("cursors", {})
     ledger.setdefault("sales", {})
     ledger.setdefault("sent", {})          # sku -> stock the marketplaces have (last sent or seen)
+    LEDGER.clear()
+    LEDGER.update(ledger)
+    by_ean = {}
+    for prod in products:
+        g = to_gtin(prod.get("isbn") or prod.get("ean"))
+        if g and sku_of(prod):
+            by_ean.setdefault(g, sku_of(prod))
     start = utcnow()
     print(f"Stock sync {iso(start)}: source {path.name} (scraped {iso(snapshot)}), {len(products)} book(s)")
 
@@ -356,6 +658,8 @@ def cmd_sync(a):
             continue
         n_new = 0
         for s in lines:
+            if not s["sku"] and s.get("ean"):           # bol.com & co. report the EAN, not our SKU
+                s["sku"] = by_ean.get(to_gtin(s["ean"]) or s["ean"], "")
             if not s["sku"]:
                 continue
             old = ledger["sales"].get(s["key"])
@@ -363,13 +667,15 @@ def cmd_sync(a):
                 if not s["cancelled"]:
                     n_new += 1
                     print(f"   + {channel}: sold {s['qty']} x {s['sku']} ({s['key']})")
-            elif old["cancelled"] != s["cancelled"] and s["cancelled"]:
+            elif not old["cancelled"] and s["cancelled"]:
                 cancelled += 1
                 print(f"   - {channel}: cancelled {s['sku']} ({s['key']}) -> stock back")
             if old is None or old != s:
                 ledger["sales"][s["key"]] = s if old is None else dict(s, at=old["at"])
         new_sales += n_new
         ledger["cursors"][channel] = iso(start)
+        if channel == "vinted":
+            ledger["vinted_after_id"] = LEDGER.get("vinted_after_id")
         channels.append(f"{channel}: {len(lines)} line(s), {n_new} new")
     print("   channels: " + "; ".join(channels))
 

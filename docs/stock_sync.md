@@ -69,6 +69,18 @@ describes how it behaves today.
 | Amazon (every EU store + UK) | Orders API **v2026-01-01** `GET /orders/2026-01-01/orders` (`lastUpdatedAfter`). v0 is deprecated. | `CANCELLED` gives stock back |
 | eBay (all sites) | Fulfillment API `GET /sell/fulfillment/v1/order` (`lastmodifieddate`) | Needs the `sell.fulfillment` scope (see Setup). `CANCELED` gives stock back. |
 | Kaufland (all 9 storefronts) | `GET /v2/order-units` (`ts_updated_from_iso`) | One order unit = one copy; cancelled units give stock back |
+| bol.com | Retailer API v10 `GET /retailer/orders` (`status=ALL`, `change-interval-minute=60`; after a gap of over 55 minutes, `latest-change-date`) | Reports the **EAN**, which the sync matches to the book with that ISBN. `quantityCancelled` is taken off. |
+| Cdiscount | Octopia `GET /orders` (`updatedAtMin`, `pageSize` 100) | `offer.sellerProductId` (EAN as fallback). `Cancelled` / `Refused` lines and orders give stock back. |
+| Allegro | `GET /order/checkout-forms` (`updatedAt.gte`, `limit` 100) | `offer.external.id` is our SKU. `CANCELLED` gives stock back. |
+| OTTO | Orders API v4 `GET /v4/orders` (`fromDate`, cursor paging) | One position item = one copy. `CANCELLED_BY_*` gives stock back. Needs the **orders** interface in your self-app. |
+| eMAG | `order/read` (`modifiedAfter` + `modifiedBefore`, max 1 month) | `product_id` is mapped back through `emag_ids.json`. Status 0 (order or line) gives stock back. |
+| CDON | `GET /v1/orders` per state (the API has no date filter) | One order = one SKU (`article_sku`). `NOT_FULFILLED` gives stock back. |
+| OnBuy (every site you use) | `GET /v2/orders` (`filter[status]=all`, `filter[modified_since]`) | `products[].sku`. Cancelled statuses give stock back. |
+| booklooker | `GET /2.0/order` (`dateFrom` / `dateTo`, max 1 month) | `orderNo` is our SKU (Bestell-Nr). `Canceled` items give stock back. |
+| Fruugo | Order API `GET /orders/download?from=` (XML) | `skuId`; `cancelledItems` are taken off. Needs the Retailer Portal login (`FRUUGO_USERNAME`, `FRUUGO_PASSWORD`). |
+| Vinted Pro | `GET /api/v1/orders?after-id=` and `GET /api/v1/orders/{id}` | `item_reference` is our SKU. `CANCELED` gives stock back. Vinted Pro is only for allowlisted businesses. |
+| Temu | `bg.order.list.v2.get` (`updateAtStart` / `updateAtEnd`) | `extCode`, or the Temu SKU id mapped back through `temu_posted.json`. `canceledQuantityBeforeShipment` is taken off. Field names come from a mirror of Temu's partner docs. |
+| TikTok Shop | Order API 202309 `POST /order/202309/orders/search` (`update_time_ge`) | `seller_sku` is mapped back through `tiktok_posted.json`; one line item = one copy. `CANCELLED` gives stock back. **TikTok's docs can't be read without a browser, so these field names aren't verified.** |
 
 **Stock is taken down on** every enabled marketplace with a sold-out option
 (the table in step 4). This includes marketplaces whose orders aren't read
@@ -76,10 +88,16 @@ yet: a book that sells on Amazon is taken down on bol.com too.
 
 **Not yet:**
 
-- **Orders aren't read** from the other marketplaces yet (bol.com, Cdiscount,
-  Allegro, AbeBooks, TikTok Shop, …). A sale there only reaches the others
-  once the source shop's stock changes and the scraper runs. Adding a reader
-  is one function in `stock_sync.py`, see `readers()`.
+- **Orders aren't read** from these marketplaces yet. A sale there only
+  reaches the others once the source shop's stock changes and the scraper
+  runs:
+  - **AbeBooks:** its Order Update API has to be requested from AbeBooks
+    first.
+  - **Fnac:** the order API docs need a partner login.
+  - **AliExpress:** the docs can't be read without a browser.
+  - **Galaxus:** orders arrive as ORDP files over SFTP.
+
+  Adding a reader is one function in `stock_sync.py`, see `readers()`.
 - **Fnac and Vinted** have no sold-out option yet, so the sync reports them
   as `CANNOT SYNC`.
 
@@ -154,7 +172,8 @@ sync would forget which sales were already counted.
 
 ## Limitations
 
-- **Four order readers so far** (Mirakl ×7, Amazon, eBay, Kaufland). See
+- **Order readers for 22 of the 26 marketplaces.** AbeBooks, Fnac,
+  AliExpress and Galaxus are still missing, see
   [Which marketplaces](#which-marketplaces).
 - **Between runs** (up to 15 minutes), a copy can still sell twice. Only an
   instant notification from every marketplace would close that gap.
@@ -189,3 +208,18 @@ It records the pusher command lines instead of running the pushers. It checks:
 
 There are 26 checks. The pushers' own `--zero-sold-out` handling is tested in
 their tests: Mirakl ×7, Amazon and eBay.
+
+```powershell
+python tests\test_order_readers.py
+```
+
+This test covers the other 12 order readers. Each marketplace client is
+replaced by a fake that answers like that marketplace's documented order API,
+and Fruugo is read over HTTP from a local XML mock. It checks:
+
+- the filters and paging each reader sends
+- SKU, EAN and ID mapping
+- quantities and partial cancellations
+- that a bol.com sale (EAN only) takes the right book down
+
+There are 27 checks.
