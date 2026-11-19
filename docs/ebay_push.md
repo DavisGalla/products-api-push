@@ -90,6 +90,7 @@ Use `--yes` to skip that question.
 | `--category-id` | suggested | eBay leaf category for every item. If you leave it out, eBay's taxonomy API suggests one from each title. |
 | `--quantity` | `1` | Stock quantity per listing. |
 | `--language` | `BOOK_LANGUAGE` | Value of the book's *Language* aspect. By default the books' language (`BOOK_LANGUAGE = "es"`) in each site's own words: `Español`, `Spanisch`, `Espagnol`, `Spagnolo`, `Spaans`, `Hiszpański`, `Spanish`. |
+| `--default-author TEXT` | – | Author used for books whose JSON has no `author`. See [Books need an author](#limitations). |
 | `--limit N` | `0` (all) | Processes at most N new items per site. |
 | `--no-publish` | off | Creates the inventory item and offer but doesn't publish them. |
 | `--dry-run` | off | Prints the payloads. Without credentials, it doesn't call eBay at all. |
@@ -112,6 +113,8 @@ fields the script reads:
 | `isbn` | Sent as the ISBN aspect and product identifier, with hyphens removed. |
 | `author` | Sent as the *Author* aspect. Book categories often require it. |
 | `language` | Book language. Falls back to `--language`. |
+| `category` | The book's source category (the scraper's `category`, e.g. `Libros infantiles`). Used to pick the eBay category, see [Categories](#categories). |
+| `ebay_category` | Optional. An eBay category id for this book on every site. Beats the automatic choice. |
 | `condition` | See [Condition](#condition). |
 | `sold_out` | `true` means the product is skipped. |
 
@@ -145,12 +148,25 @@ Example (scraper format):
 ### Offer (`POST` or `PUT /sell/inventory/v1/offer`)
 
 - `format` is `FIXED_PRICE`, and `availableQuantity` comes from `--quantity`.
-- `categoryId` comes from `--category-id` or the taxonomy suggestion.
+- `categoryId` is chosen as described under [Categories](#categories).
 - The price is formatted to 2 decimals, in the market's currency.
 - `listingPolicies` holds your fulfillment, payment and return policy IDs.
 - `merchantLocationKey` is your inventory location.
 - `includeCatalogProductDetails` is `true`, so eBay can fill details from its
   catalog when it recognises the ISBN.
+
+### Categories
+
+The category for each book is the first of these that applies:
+
+1. `--category-id` on the command line (every book, every site).
+2. `ebay_category` in the book's JSON.
+3. The kind of book, read from its source `category` text (the rules are `KIND_RULES` in the script):
+   - ebay.de, .at, .ch, .co.uk, .ie and .pl have one Books category, `261186`.
+   - ebay.es, .fr, .it, .nl and .be split books up, with the same ids on all five: `171219` children's fiction (e.g. `Libros infantiles`), `171210` children's educational, `171228` fiction, `171243` non-fiction.
+4. eBay's taxonomy suggestion from the title. This is used when the source category isn't recognised, such as a shipping-region label like `Para Canarias, Ceuta y Melilla`.
+
+The ids come from eBay's taxonomy API in the sandbox; the live site's suggestion for books should be at least as good.
 
 ### Condition
 
@@ -212,8 +228,8 @@ These are created in the folder you run the script from.
 - **Creating and updating listings only.** Ending listings, syncing stock and handling orders aren't implemented.
 - **The category is suggested from the title** unless you pass `--category-id`, so check what it suggests.
 - **Aspect names are per site language.** eBay wants the aspects named in the site's own language: `Buchtitel`, `Autor`, `Verlag`, `Sprache` on ebay.de, .at and .ch; `Título`, `Autor`, `Editorial`, `Idioma` on ebay.es; and so on for French, Italian, Dutch and Polish. The table is `ASPECT_NAMES` in the script. The names come from eBay's taxonomy API in the sandbox, so confirm them with a `--no-publish` run on the real account before the first live push.
-- **Tested against the eBay sandbox, not the live site.** One book was published on the sandbox for each of the 11 sites. In the sandbox, the automatic category suggestion is unreliable (it can suggest wiper blades for a book), so those runs used `--category-id`: `261186` for ebay.de, .at, .ch, .co.uk, .ie and .pl, and `171228` (Fiction) for ebay.es, .fr, .it, .nl and .be. The live site's suggestion is expected to be better. Follow the first-run order under [Usage](#usage) for the real site.
-- **Books need an `author`.** Without it eBay refuses to publish in the book categories.
+- **Tested against the eBay sandbox, not the live site.** One book was published on the sandbox for each of the 11 sites. In the sandbox, the automatic category suggestion is unreliable (it can suggest wiper blades for a book), which is why books are mapped to categories from their source category (see [Categories](#categories)). A real scraped book was then published in category `171219` on ebay.es, .fr, .it, .nl and .be without `--category-id`. Follow the first-run order under [Usage](#usage) for the real site.
+- **Books need an `author`.** Without it eBay can refuse to publish in the book categories (the sandbox did on ebay.de). The scraper's output has no author, because Correos Market doesn't show one for the Cuentos con Valores books: the product page lists only title, seller and brand. So the script prints a warning before it calls eBay, naming how many books have no author. To fix it, add an `author` field to the JSON, or pass `--default-author "Name"` to use the same author for every book that lacks one. Use a real author name; the publisher's name is a stopgap at best, and I haven't checked whether eBay accepts it.
 
 ## Testing against the sandbox
 

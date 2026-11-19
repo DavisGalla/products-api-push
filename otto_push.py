@@ -73,7 +73,12 @@ SCOPES = "products availability"
 STATE_FILE = Path("otto_posted.json")
 PREVIEW_FILE = Path("otto_products.json")
 BRANDS_CACHE = Path("otto_brands.json")
-BATCH = 500                  # max product variations / prices / statuses per request (API limit)
+# A test run against OTTO's sandbox keeps its own state and brand cache, so it never marks a book
+# as done for the real shop.
+if "sandbox" in (os.environ.get("OTTO_API_URL") or "").lower():
+    STATE_FILE = Path("otto_sandbox_posted.json")
+    BRANDS_CACHE = Path("otto_sandbox_brands.json")
+BATCH = 500                 # max product variations / prices / statuses per request (API limit)
 QTY_BATCH = 200              # quantities / delivery information per request
 
 

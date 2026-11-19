@@ -242,6 +242,7 @@ The last batch the script built is saved in `allegro_offers.json`.
 | `allegro_posted.json` | SKU mapped to `offer_id`, `ean`, `price` (PLN), `stock`, `status` and times. |
 | `allegro_offers.json` | The last set of offers that was built. |
 | `allegro_token.json` | Access and refresh tokens. **Secret**, not in git. |
+| `allegro_sandbox_posted.json`, `allegro_sandbox_token.json` | The same two files, used instead when `ALLEGRO_SANDBOX=1` (or `ALLEGRO_API_URL` points to the sandbox). A sandbox run never touches the real state or the real token. The sandbox token is **secret** too. |
 
 ## Errors and troubleshooting
 

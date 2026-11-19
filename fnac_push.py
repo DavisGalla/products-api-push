@@ -343,6 +343,10 @@ def main():
     p.add_argument("--poll", type=int, default=15, help="seconds between batch status checks")
     sub.add_parser("status", parents=[common], help="list your offers on Fnac")
     a = ap.parse_args()
+    if a.sandbox:
+        # a test run keeps its own state, so it never marks a book as done for the real marketplace
+        global STATE_FILE
+        STATE_FILE = Path("fnac_sandbox_posted.json")
     if a.cmd == "push" and a.dry_run:  # no credentials needed to build the file
         api = None
         if all(os.environ.get(k) for k in ("FNAC_PARTNER_ID", "FNAC_SHOP_ID", "FNAC_KEY")):

@@ -349,6 +349,12 @@ def main():
     sub.add_parser("status", parents=[common], help="refresh status of pushed items")
 
     args = ap.parse_args()
+    if args.sandbox:
+        # a test run keeps its own state and ontology cache: sandbox ids and "posted" entries
+        # must never leak into the real account's files
+        global STATE_FILE, ONTOLOGY_CACHE
+        STATE_FILE = Path("posted_api_sandbox.json")
+        ONTOLOGY_CACHE = Path(".vinted_ontologies_sandbox.json")
     api = VintedPro(args.token, args.sandbox)
     {"ontologies": cmd_ontologies, "push": cmd_push, "status": cmd_status}[args.cmd](api, args)
 

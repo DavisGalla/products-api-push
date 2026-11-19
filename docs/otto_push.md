@@ -175,6 +175,7 @@ reason.
 | `otto_products.json` | The last product data built (also on `--dry-run`) |
 | `otto_posted.json` | Per SKU: EAN, price, stock, active, brand, times |
 | `otto_brands.json` | Cached list of usable OTTO brands |
+| `otto_sandbox_posted.json`, `otto_sandbox_brands.json` | The same two files, used instead when `OTTO_API_URL` points to the sandbox. A sandbox run never touches the real state or brand cache. |
 
 All three are in `.gitignore`.
 

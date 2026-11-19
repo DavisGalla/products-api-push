@@ -413,6 +413,10 @@ def main():
     sub.add_parser("status", parents=[common], help="check pushed offers (default: all recorded markets)")
 
     a = ap.parse_args()
+    if a.sandbox:
+        # a test run keeps its own state, so it never marks a book as done for the real marketplaces
+        global STATE_FILE
+        STATE_FILE = Path("amazon_sandbox_posted.json")
     api = SPAPI(a.sandbox)
     {"push": cmd_push, "status": cmd_status}[a.cmd](api, a)
 

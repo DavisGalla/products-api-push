@@ -160,6 +160,7 @@ Example from `cdon_articles.json` (8.50 EUR, shortened):
 |---|---|
 | `cdon_articles.json` | The last new articles built (also on `--dry-run`) |
 | `cdon_posted.json` | Per SKU: ISBN, status (`ok`/`failed`/`pending`), sale status, prices, stock, status per market, CDON's error codes, times |
+| `cdon_sandbox_posted.json` | The same, used instead when `CDON_API_URL` points to the sandbox. A sandbox run never touches `cdon_posted.json`. |
 
 Both are in `.gitignore`.
 

@@ -167,6 +167,7 @@ what was sent.
 | File | Contents |
 |---|---|
 | `fnac_posted.json` | SKU mapped to `ean`, `batch_id`, `offer_fnac_id` and `pushed_at`. Delete an entry to push that offer again, or use `--resend`. |
+| `fnac_sandbox_posted.json` | The same, for `--sandbox` runs. A sandbox run never touches `fnac_posted.json`, so a test never marks a book as done on the real marketplace. |
 | `fnac_offers.xml` | The last offers that were built or sent. |
 
 ## Errors and troubleshooting

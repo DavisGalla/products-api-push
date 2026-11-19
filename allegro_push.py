@@ -92,6 +92,13 @@ STATE_FILE = Path("allegro_posted.json")
 PREVIEW_FILE = Path("allegro_offers.json")
 TOKEN_FILE = Path("allegro_token.json")
 
+# A test run against Allegro's sandbox keeps its own state and login token, so it never marks a
+# book as done for the real site or overwrites the real token.
+if (os.environ.get("ALLEGRO_SANDBOX") in ("1", "true", "yes")
+        or "sandbox" in (os.environ.get("ALLEGRO_API_URL") or "").lower()):
+    STATE_FILE = Path("allegro_sandbox_posted.json")
+    TOKEN_FILE = Path("allegro_sandbox_token.json")
+
 
 def hosts():
     sandbox = os.environ.get("ALLEGRO_SANDBOX") in ("1", "true", "yes")

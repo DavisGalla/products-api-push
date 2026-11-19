@@ -225,6 +225,11 @@ def test_ebay():
         S.reset()
         rc, out = run(EBAY_WRAPPER, [pf, "--dry-run"], tmp)
         check("dry-run without credentials works", rc == 0 and "dry run without credentials" in out, out[-300:])
+        check("books without an author: clear warning before any eBay call",
+              "WARNING:" in out and "have no author" in out and "--default-author" in out, out[:500])
+        rc, out = run(EBAY_WRAPPER, [pf, "--dry-run", "--default-author", "Test Autor"], tmp)
+        check("--default-author fills the missing author and silences the warning",
+              rc == 0 and "Test Autor" in out and "WARNING:" not in out, out[:500])
 
         rc, out = run(EBAY_WRAPPER, [pf, "--market", "EBAY_ES", "--yes"], tmp, EBAY_ENV)
         pub = S.ebay_published
@@ -310,6 +315,35 @@ def test_ebay():
 
         rc, out = run(EBAY_WRAPPER, [pf, "--markets", "EBAY_XX", "--yes"], tmp, EBAY_ENV)
         check("unknown site refused", rc != 0 and "Unknown eBay site" in out, out[-300:])
+
+    # ---- book categories: from the book's own category, per site
+    with tempfile.TemporaryDirectory() as tmp:
+        S.reset()
+        S.policy_markets = {"EBAY_ES", "EBAY_DE"}
+        img = "https://example.com/1.jpg"
+        cat_books = [
+            {"id": "C-KIDS", "title": "Libro infantil", "price_eur": 9, "image": img, "category": "Libros infantiles"},
+            {"id": "C-SCI", "title": "Libro de ciencia", "price_eur": 9, "image": img, "category": "Ciencia e historia"},
+            {"id": "C-NONE", "title": "Libro sin categoria", "price_eur": 9, "image": img},
+            {"id": "C-OVR", "title": "Libro con categoria propia", "price_eur": 9, "image": img,
+             "category": "Libros infantiles", "ebay_category": "999"},
+        ]
+        cf = Path(tmp) / "cats.json"
+        cf.write_text(json.dumps(cat_books), encoding="utf-8")
+        rc, out = run(EBAY_WRAPPER, [str(cf), "--markets", "EBAY_ES,EBAY_DE", "--yes"], tmp, EBAY_ENV)
+
+        def cat(market, sku):
+            return S.by_market.get((market, sku), {}).get("offer", {}).get("categoryId")
+
+        check("ebay.es: children's book -> 171219, non-fiction -> 171243",
+              cat("EBAY_ES", "C-KIDS") == "171219" and cat("EBAY_ES", "C-SCI") == "171243",
+              f"{cat('EBAY_ES', 'C-KIDS')} {cat('EBAY_ES', 'C-SCI')} {out[-300:]}")
+        check("ebay.de has one Books category (261186) for every kind",
+              cat("EBAY_DE", "C-KIDS") == "261186" and cat("EBAY_DE", "C-SCI") == "261186")
+        check("unknown category: falls back to eBay's suggestion",
+              cat("EBAY_ES", "C-NONE") == "261186", f"{cat('EBAY_ES', 'C-NONE')}")
+        check("ebay_category in the JSON beats the mapping on every site",
+              cat("EBAY_ES", "C-OVR") == "999" and cat("EBAY_DE", "C-OVR") == "999")
 
     with tempfile.TemporaryDirectory() as tmp:
         rc, out = run(EBAY_WRAPPER, [pf, "--markets", "eur", "--dry-run"], tmp, show=False)

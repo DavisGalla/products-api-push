@@ -201,6 +201,7 @@ These are created in the folder you run the script from.
 |---|---|
 | `posted_api.json` | `item_reference` → `item_id`, `pushed_at`, `status`, `marketplace_item_id`. Delete an entry to push that item again. |
 | `.vinted_ontologies.json` | Cached ontologies. Delete it, or run `ontologies`, to refresh. |
+| `posted_api_sandbox.json`, `.vinted_ontologies_sandbox.json` | The same two files, for `--sandbox` runs. A sandbox run never touches the real ones, so a test never marks an item as pushed on the real account and sandbox ids never end up in the real cache. |
 
 ## How authentication works
 

@@ -203,6 +203,7 @@ also waits 0.6 seconds after each catalog search.
 | File | Contents |
 |---|---|
 | `amazon_posted.json` | Keyed by `MARKET:SKU`, for example `DE:142534`. Each entry holds `asin`, `status`, `submissionId` and `pushed_at`, plus `listing_status` and `issues` after `status`. Delete an entry to push that offer again. |
+| `amazon_sandbox_posted.json` | The same, for `--sandbox` runs. A sandbox run never touches `amazon_posted.json`, so a test never marks a book as done on the real marketplaces. |
 
 Only offers that Amazon `ACCEPTED` are recorded. Products that were skipped or
 rejected in a marketplace are tried again there on the next run, which also

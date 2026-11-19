@@ -42,6 +42,7 @@ import base64
 import html
 import json
 import os
+import re
 import sys
 import time
 from decimal import ROUND_HALF_UP, Decimal
@@ -86,6 +87,50 @@ ASPECT_NAMES = {
     "nl": {"title": "Titel", "author": "Auteur", "publisher": "Uitgever", "language": "Taal"},
     "pl": {"title": "Tytuł książki", "author": "Autor", "publisher": "Wydawca", "language": "Język"},
 }
+# ---- book categories ------------------------------------------------------
+# Checked in the sandbox's taxonomy API. ebay.de/.at/.ch/.co.uk/.ie/.pl have one
+# plain "Books" category. ebay.es/.fr/.it/.nl/.be split books into fiction,
+# non-fiction and a children's branch, with the same ids on all five sites.
+SINGLE_BOOK_CATEGORY = "261186"
+SINGLE_BOOK_MARKETS = {"EBAY_DE", "EBAY_AT", "EBAY_CH", "EBAY_GB", "EBAY_IE", "EBAY_PL"}
+SPLIT_BOOK_CATEGORIES = {
+    "children": "171219",     # children's / young adult fiction
+    "children_nonfiction": "171210",  # children's educational / interactive
+    "fiction": "171228",
+    "nonfiction": "171243",
+}
+# The book's kind, read from the source category text (the scraper's "category").
+# First match wins. Anything that matches nothing falls back to eBay's own suggestion.
+KIND_RULES = [
+    ("children_nonfiction", r"did[aá]ctic|educativ|interactiv|educational"),
+    ("children", r"infantil|juvenil|beb[eé]|enfant|jeunesse|kinder|jugend|bambini|ragazzi|jeugd|children|kids|dzieci"),
+    ("nonfiction", r"ciencia|historia|salud|ocio|pr[aá]ctic|consulta|texto|cocina|manualidad|non-?fiction|sachbuch|saggistica"),
+    ("fiction", r"novela|narrativa|literatura|ficci[oó]n|fiction|roman|belletristik"),
+]
+
+
+def book_kind(p):
+    text = (p.get("source_category") or "").lower()
+    for kind, pattern in KIND_RULES:
+        if re.search(pattern, text):
+            return kind
+    return None
+
+
+def book_category(p, market):
+    """eBay category id for this book on this site, or None to ask eBay's taxonomy.
+
+    Order: the book's own "ebay_category" field, then the kind read from its source
+    category. --category-id on the command line beats both (handled by the caller).
+    """
+    if p.get("ebay_category"):
+        return str(p["ebay_category"])
+    kind = book_kind(p)
+    if not kind:
+        return None
+    return SINGLE_BOOK_CATEGORY if market in SINGLE_BOOK_MARKETS else SPLIT_BOOK_CATEGORIES[kind]
+
+
 SCOPES = "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account"
 # Schema.org condition (scraped JSON) -> eBay inventory condition enum.
 # An eBay enum value (e.g. "USED_GOOD") in the JSON is passed through as-is.
@@ -191,6 +236,8 @@ def normalize(raw):
         "isbn": raw.get("isbn"),
         "author": raw.get("author"),
         "language": raw.get("language"),
+        "source_category": raw.get("category"),
+        "ebay_category": raw.get("ebay_category"),
         "images": (raw.get("images") or raw.get("image_urls") or raw.get("photo_urls")
                    or ([raw["image"]] if raw.get("image") else [])),
         "condition": CONDITION_MAP.get(raw.get("condition"), raw.get("condition") or "NEW"),
@@ -238,6 +285,11 @@ def push_one(eb, p, a, ctx):
         "product": product,
     }
     cat_id = a.category_id
+    if not cat_id:
+        cat_id = book_category(p, eb.market)
+        if cat_id:
+            print(f"   category: {cat_id} (from the book's category '{p.get('source_category') or ''}')"
+                  if not p.get("ebay_category") else f"   category: {cat_id} (ebay_category in the JSON)")
     if not cat_id:
         cat_id, cat_name = eb.suggest_category(p["title"])
         if not cat_id:
@@ -356,6 +408,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="show payloads, call nothing but lookups")
     ap.add_argument("--sandbox", action="store_true")
     ap.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
+    ap.add_argument("--default-author", default=None, metavar="TEXT",
+                    help="Author used for books whose JSON has no 'author' (eBay requires one in some book categories)")
     ap.add_argument("--zero-sold-out", action="store_true",
                     help="stock 0 on every site for listed books now sold out; restore stock when they are back")
     a = ap.parse_args()
@@ -373,6 +427,8 @@ def main():
     products = []
     for i, r in enumerate(raw, 1):
         p = normalize(r)
+        if a.default_author and not p["author"]:
+            p["author"] = a.default_author
         probs = validate(p)
         if probs:
             print(f"[{i}] SKIP '{p['title']}': " + "; ".join(probs))
@@ -388,6 +444,13 @@ def main():
         todo[market] = items[: a.limit] if a.limit else items
         already = len(products) - len(items)
         print(f"{market}: {len(todo[market])} item(s) to list" + (f", {already} already done" if already else ""))
+    no_author = [p for p in {p["sku"]: p for items in todo.values() for _, _, p in items}.values() if not p["author"]]
+    if no_author:
+        names = "; ".join(f"{p['sku']} '{p['title'][:40]}'" for p in no_author[:3])
+        print(f"WARNING: {len(no_author)} book(s) to list have no author ({names}"
+              f"{', ...' if len(no_author) > 3 else ''}).\n"
+              "  eBay's book categories can refuse a listing without an author (seen on ebay.de, .at, .ch, .co.uk, .ie, .pl).\n"
+              "  Add an 'author' field to the JSON, or pass --default-author \"Name\".")
     updates = sold_out_updates(raw, state, markets, a.quantity) if a.zero_sold_out else {}
     if updates:
         print(f"{sum(len(o) for _, o in updates.values())} listing(s) need a stock change (sold out / back in stock).")

@@ -77,6 +77,11 @@ BATCH = 100
 STATE_FILE = Path("cdon_posted.json")
 PREVIEW_FILE = Path("cdon_articles.json")
 
+# A test run against CDON's sandbox keeps its own state, so it never marks a book as done
+# for the real shop.
+if "sandbox" in (os.environ.get("CDON_API_URL") or "").lower():
+    STATE_FILE = Path("cdon_sandbox_posted.json")
+
 
 class ApiError(Exception):
     pass

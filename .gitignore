@@ -2,6 +2,7 @@
 vinted_push.py
 ebay_posted.json
 ebay_sandbox_posted.json
+*sandbox*.json
 amazon_posted.json
 casadellibro_posted.json
 casadellibro_offers.csv
