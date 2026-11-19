@@ -236,6 +236,9 @@ def test_ebay():
         if "T-USED" in pub:
             asp = pub["T-USED"]["item"]["product"]["aspects"]
             check("ISBN sent without hyphens", asp.get("ISBN") == ["9788410413290"], f"got {asp.get('ISBN')}")
+            check("ebay.es uses Spanish aspect names (Título, Idioma), not English ones",
+                  "Título" in asp and "Idioma" in asp and "Language" not in asp and "Book Title" not in asp,
+                  f"got {sorted(asp)}")
             check("price formatted", pub["T-USED"]["offer"]["pricingSummary"]["price"] == {"value": "12.50", "currency": "EUR"})
         check("category suggested + policies + location set",
               all(v["offer"]["categoryId"] == "261186" and v["offer"]["merchantLocationKey"] == "WH1" for v in pub.values()))
@@ -264,8 +267,12 @@ def test_ebay():
             check("each site gets its own policies",
                   S.by_market[("EBAY_DE", "T-USED")]["offer"]["listingPolicies"]["returnPolicyId"] == "R1-EBAY_DE")
             check("book language in the site's words (Spanisch / Spanish)",
-                  S.by_market[("EBAY_DE", "T-USED")]["item"]["product"]["aspects"]["Language"] == ["Spanisch"]
+                  S.by_market[("EBAY_DE", "T-USED")]["item"]["product"]["aspects"]["Sprache"] == ["Spanisch"]
                   and S.by_market[("EBAY_GB", "T-USED")]["item"]["product"]["aspects"]["Language"] == ["Spanish"])
+            de_asp = S.by_market[("EBAY_DE", "T-USED")]["item"]["product"]["aspects"]
+            check("ebay.de uses German aspect names (Buchtitel, Sprache), not English ones",
+                  "Buchtitel" in de_asp and "Sprache" in de_asp and "Language" not in de_asp and "Book Title" not in de_asp,
+                  f"got {sorted(de_asp)}")
         state = json.loads((Path(tmp) / "ebay_posted.json").read_text())
         check("state keeps each site apart", {k.split(":")[0] for k in state} == {"EBAY_ES", "EBAY_DE", "EBAY_GB"})
 

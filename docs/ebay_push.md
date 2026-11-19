@@ -190,6 +190,7 @@ These are created in the folder you run the script from.
 | File | Contents |
 |---|---|
 | `ebay_posted.json` | `MARKET:SKU` mapped to `offerId`, `listingId` and `published`. Delete an entry to push that product again. |
+| `ebay_sandbox_posted.json` | The same, for `--sandbox` runs. Sandbox runs never touch `ebay_posted.json`, so a test never marks a book as done on the real site. |
 
 ## Errors and troubleshooting
 
@@ -210,7 +211,13 @@ These are created in the folder you run the script from.
 - **Exchange rates** for GBP, CHF and PLN are fixed in `EUR_RATE`, not fetched live.
 - **Creating and updating listings only.** Ending listings, syncing stock and handling orders aren't implemented.
 - **The category is suggested from the title** unless you pass `--category-id`, so check what it suggests.
-- **The script hasn't been run against the real eBay API yet.** Follow the first-run order under [Usage](#usage).
+- **Aspect names are per site language.** eBay wants the aspects named in the site's own language: `Buchtitel`, `Autor`, `Verlag`, `Sprache` on ebay.de, .at and .ch; `Título`, `Autor`, `Editorial`, `Idioma` on ebay.es; and so on for French, Italian, Dutch and Polish. The table is `ASPECT_NAMES` in the script. The names come from eBay's taxonomy API in the sandbox, so confirm them with a `--no-publish` run on the real account before the first live push.
+- **Tested against the eBay sandbox, not the live site.** One book was published on the sandbox for each of the 11 sites. In the sandbox, the automatic category suggestion is unreliable (it can suggest wiper blades for a book), so those runs used `--category-id`: `261186` for ebay.de, .at, .ch, .co.uk, .ie and .pl, and `171228` (Fiction) for ebay.es, .fr, .it, .nl and .be. The live site's suggestion is expected to be better. Follow the first-run order under [Usage](#usage) for the real site.
+- **Books need an `author`.** Without it eBay refuses to publish in the book categories.
+
+## Testing against the sandbox
+
+The sandbox's Seller Hub pages are often broken. [tools/ebay_sandbox_setup.py](../tools/ebay_sandbox_setup.py) does what they would through the API: it opts the sandbox test user in to Business Policies and creates a shipping, payment and return policy plus an inventory location. It skips anything that already exists. To get the sandbox refresh token, use [tools/ebay_get_refresh_token.py](../tools/ebay_get_refresh_token.py): it exchanges the code from the consent redirect for a refresh token and copies it to the clipboard without printing it. Keep the three sandbox `EBAY_*` secrets in their own Bitwarden project and run with `bws run --project-id <sandbox project id> -- ...`, so they never mix with the real keys.
 
 ## Testing
 

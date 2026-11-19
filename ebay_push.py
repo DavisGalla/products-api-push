@@ -74,6 +74,18 @@ LANGUAGE_WORDS = {
     "es": {"es": "Español", "de": "Spanisch", "fr": "Espagnol", "it": "Spagnolo", "nl": "Spaans",
            "pl": "Hiszpański", "en": "Spanish"},
 }
+# Aspect names are per site language, read from eBay's taxonomy API (sandbox) for the
+# book categories: 261186 on de/at/ch/gb/ie/pl, 171228 (Fiction) on es/fr/it/nl/be.
+# The real site may differ, so check a --no-publish run on the real account first.
+ASPECT_NAMES = {
+    "en": {"title": "Book Title", "author": "Author", "publisher": "Publisher", "language": "Language"},
+    "de": {"title": "Buchtitel", "author": "Autor", "publisher": "Verlag", "language": "Sprache"},
+    "es": {"title": "Título", "author": "Autor", "publisher": "Editorial", "language": "Idioma"},
+    "fr": {"title": "Titre", "author": "Auteur", "publisher": "Éditeur", "language": "Langue"},
+    "it": {"title": "Titolo", "author": "Autore", "publisher": "Editore", "language": "Lingua"},
+    "nl": {"title": "Titel", "author": "Auteur", "publisher": "Uitgever", "language": "Taal"},
+    "pl": {"title": "Tytuł książki", "author": "Autor", "publisher": "Wydawca", "language": "Język"},
+}
 SCOPES = "https://api.ebay.com/oauth/api_scope/sell.inventory https://api.ebay.com/oauth/api_scope/sell.account"
 # Schema.org condition (scraped JSON) -> eBay inventory condition enum.
 # An eBay enum value (e.g. "USED_GOOD") in the JSON is passed through as-is.
@@ -202,14 +214,15 @@ def validate(p):
 
 
 def inventory_item_body(p, eb, default_lang):
-    aspects = {"Book Title": [p["title"]]}
+    names = {**ASPECT_NAMES["en"], **ASPECT_NAMES.get(eb.lang[:2], {})}
+    aspects = {names["title"]: [p["title"]]}
     if p["isbn"]:
         aspects["ISBN"] = [p["isbn"].replace("-", "")]
     if p["author"]:
-        aspects["Author"] = [p["author"]]
+        aspects[names["author"]] = [p["author"]]
     if p["brand"]:
-        aspects["Publisher"] = [p["brand"]]
-    aspects["Language"] = [p["language"] or default_lang]
+        aspects[names["publisher"]] = [p["brand"]]
+    aspects[names["language"]] = [p["language"] or default_lang]
     product = {"title": p["title"], "description": p["description_html"], "aspects": aspects, "imageUrls": p["images"][:24]}
     if p["isbn"]:
         product["isbn"] = [p["isbn"].replace("-", "")]
@@ -347,6 +360,10 @@ def main():
                     help="stock 0 on every site for listed books now sold out; restore stock when they are back")
     a = ap.parse_args()
     markets = parse_markets(a)
+    if a.sandbox:
+        # sandbox listings must never mark a book as done for the real site
+        global STATE_FILE
+        STATE_FILE = Path("ebay_sandbox_posted.json")
 
     raw = json.loads(Path(a.json_file).read_text(encoding="utf-8"))
     if isinstance(raw, dict):

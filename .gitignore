@@ -1,6 +1,7 @@
 # Not part of this repo (other pushers / local-only)
 vinted_push.py
 ebay_posted.json
+ebay_sandbox_posted.json
 amazon_posted.json
 casadellibro_posted.json
 casadellibro_offers.csv
