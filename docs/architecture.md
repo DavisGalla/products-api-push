@@ -240,10 +240,10 @@ credentials, and doesn't contact any real API:
 | `test_aliexpress.py` | AliExpress Open Platform (signature, tokens, EAN lookup, photo upload, product post) | 26 |
 | `test_temu.py` | Temu Partner API (signature, category template, variation, photo upload, goods add, stock/price/sale status) | 22 |
 | `test_tiktok.py` | TikTok Shop Partner API (signature, tokens, shop cipher, attributes/rules, GPSR, photo upload, create, stock/price, activate/deactivate) | 28 |
-| `test_galaxus.py` | Galaxus SFTP server (real SFTP via paramiko: pinned host key, login, tmp_ upload + rename, retries) and the documented feed import | 22 |
+| `test_galaxus.py` | Galaxus SFTP server (real SFTP via paramiko: pinned host key, login, tmp_ upload + rename, retries; provider name required; mass-removal guard; bad stock values) and the documented feed import | 26 |
 | `test_otto.py` | OTTO Market API (token scopes, Products v5 update tasks, brands/categories, prices, active status, marketplace status, Availability 207 partial failures) | 25 |
 | `test_emag.py` | eMAG Marketplace API (Basic auth, data envelope, find_by_eans, VAT, attach by PNK, price window, batch errors, light offer/save, read with pagination) | 23 |
-| `test_fruugo.py` | Retailer side of the Fruugo feed (local web server for images and feed, SFTP via paramiko with pinned host key) and the documented CSV rules | 36 |
+| `test_fruugo.py` | Retailer side of the Fruugo feed (local web server for images and feed, SFTP via paramiko with pinned host key) and the documented CSV rules (a book with bad data is kept, not retired) | 39 |
 | `test_cdon.py` | CDON merchant API (Basic auth, bulk create/update with limits, market currencies, asynchronous batch and SKU statuses, sku_already_exists, categories, 429) | 26 |
 | `test_onbuy.py` | OnBuy API v2 (token renewal, barcode search in 50s, batch listings with per-row errors, by-sku update/delete, several sites, check-winning, 429) | 21 |
 | `test_stock_sync.py` | Order APIs: Mirakl OR11, Amazon Orders v2026-01-01, eBay Fulfillment, Kaufland order units; ledger, cancellations, settle rule, pusher commands, push_all integration | 26 |
@@ -253,7 +253,7 @@ credentials, and doesn't contact any real API:
 | `test_sandbox_state.py` | Each pusher with a sandbox mode keeps its own state, token and cache files, never the real ones | 17 |
 | `test_dry_run_offline.py` | Every pusher's `push --dry-run` works with no credentials | 23 |
 | `test_book_data.py` | The shared price reader (`book_data.clean_price`): text prices, bad input, zero and negative | 55 |
-| **Total** | | **808, all passing** |
+| **Total** | | **815, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.

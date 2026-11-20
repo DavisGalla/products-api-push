@@ -225,11 +225,30 @@ def local():
     ok(served[0] == IMAGES[LONG + "-big.png"] and all(fp.image_info(b)[1] >= 400 for b in served),
        "mirrored image URLs serve the original images")
     ok("Verified:" in out, "feed downloaded back from the public URL and matched")
+    out, code = run("status")
+    ok(len(rows) == 2 and "\n" in r2["Description"] and f"({len(rows)} rows," in out,
+       "status counts products, not text lines (one description has a line break)")
 
     hits, mtime = len(Web.image_hits), (Web.root / "fruugo.csv").stat().st_mtime_ns
     out, code = run("push", "books.json", "--yes")
     ok("unchanged" in out and len(Web.image_hits) == hits and (Web.root / "fruugo.csv").stat().st_mtime_ns == mtime,
        "second run: unchanged feed not republished, images (also rejected ones) not downloaded again")
+
+    # A book that is still in the source but has unusable data right now (blank price) must NOT be
+    # retired: NOTAVAILABLE is permanent on Fruugo. It keeps its last good row.
+    bad = [dict(b, price_eur=None) if b["id"] == "B1" else b for b in BOOKS]
+    out, code = run("push", "books.json", "--yes", books=bad)
+    r = {x["SkuId"]: x for x in feed_rows()}["B1"]
+    st = json.loads(Path("fruugo_posted.json").read_text(encoding="utf-8"))
+    ok(code is None and r["StockStatus"] == "INSTOCK" and r["NormalPriceWithVAT"] == "11.00"
+       and "kept the previous version of B1" in out and "no longer in the source" not in out
+       and st["B1"]["status"] == "INSTOCK" and not st["B1"].get("gone_since"),
+       "book still in the source with a blank price: kept as it was, not retired as NOTAVAILABLE")
+    bad = [dict(b, price_eur=None, sold_out=True) if b["id"] == "B2" else b for b in BOOKS]
+    out, code = run("push", "books.json", "--yes", books=bad)
+    r = {x["SkuId"]: x for x in feed_rows()}["B2"]
+    ok(r["StockStatus"] == "OUTOFSTOCK" and r["StockQuantity"] == "0",
+       "book that sold out AND has bad data: stock 0, not a stale INSTOCK row")
 
     out, code = run("push", "books.json", "--yes", books=[dict(b, price_eur=b["price_eur"] + 1) for b in BOOKS])
     ok(feed_rows()[0]["NormalPriceWithVAT"] == "12.00" and "1 changed" not in out and "2 changed" in out,

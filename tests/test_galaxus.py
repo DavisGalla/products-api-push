@@ -366,11 +366,44 @@ def test_galaxus():
         check("status: last feed contents and the file on the server",
               rc == 0 and "2 offer(s)" in out and f"On the SFTP server: {FEED}" in out, out[-300:])
 
+        # no provider name: the feed would go out under a placeholder file name Galaxus ignores
+        n = len(S.opened)
+        no_provider = {k: v for k, v in env.items() if k != "GALAXUS_PROVIDER"}
+        rc, out = run(["push", pf, "--yes", "--force"], tmp, no_provider)
+        check("no GALAXUS_PROVIDER: real push refused, nothing uploaded under a placeholder name",
+              rc != 0 and "GALAXUS_PROVIDER" in out and len(S.opened) == n
+              and not (Path(srv_dir) / "StockPricingData_YourShop.csv").exists(), out[-300:])
+
+        # a data glitch that makes most books invalid must not silently take them offline
+        other = str(Path(tmp) / "other.json")
+        Path(other).write_text(json.dumps([{"id": "GX-OTHER", "title": "Other", "price_eur": 6,
+                                            "isbn": "9781861972712", "condition": "NewCondition"}]), encoding="utf-8")
+        size = served.stat().st_size
+        rc, out = run(["push", other, "--yes"], tmp, env)
+        check("mass removal guard: refuses to take most offers offline at once",
+              rc != 0 and "--allow-mass-removal" in out and served.stat().st_size == size, out[-300:])
+        rc, out = run(["push", other, "--yes", "--allow-mass-removal"], tmp, env)
+        rows, errors = import_feed(served.read_bytes())
+        check("--allow-mass-removal publishes it", rc == 0 and [r["ProviderKey"] for r in rows] == ["GX-OTHER"], out[-300:])
+
     with tempfile.TemporaryDirectory() as tmp:
         Path(tmp, "books.json").write_text(json.dumps(BOOKS, ensure_ascii=False), encoding="utf-8")
         rc, out = run(["push", str(Path(tmp, "books.json")), "--dry-run", "--limit", "1"], tmp)
         rows, errors = import_feed(Path(tmp, "galaxus_feed.csv").read_bytes())
         check("--limit 1: only one new offer in the feed", len(rows) == 1 and "1 new" in out, out[-200:])
+
+        stock_books = [
+            {"id": "ST-OK", "title": "Fine", "price_eur": 8, "isbn": "9788409591923", "stock": "4", "condition": "NewCondition"},
+            {"id": "ST-TEXT", "title": "Text stock", "price_eur": 8, "isbn": "9788420658674", "stock": "many", "condition": "NewCondition"},
+            {"id": "ST-NEG", "title": "Negative stock", "price_eur": 8, "isbn": "9780306406157", "stock": -3, "condition": "NewCondition"},
+            {"id": "ST-FLOAT", "title": "Fractional stock", "price_eur": 8, "isbn": "9781861972712", "stock": "2.5", "condition": "NewCondition"},
+        ]
+        Path(tmp, "stock.json").write_text(json.dumps(stock_books), encoding="utf-8")
+        rc, out = run(["push", str(Path(tmp, "stock.json")), "--dry-run"], tmp)
+        rows, errors = import_feed(Path(tmp, "galaxus_feed.csv").read_bytes())
+        check("bad stock values (text, negative, fractional): skipped with a message, no crash",
+              rc == 0 and [r["ProviderKey"] for r in rows] == ["ST-OK"] and out.count("stock must be a whole number") == 3
+              and rows[0]["QuantityOnStock"] == "4", out[-300:])
     sock.close()
 
 

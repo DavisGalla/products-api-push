@@ -65,6 +65,11 @@ the script behaves today.
    - **Gone from books.json:** the book stays in the feed as `NOTAVAILABLE`
      for `NOTAVAILABLE_KEEP_DAYS` (30 days), so Fruugo removes it, and is left
      out after that.
+   - **Still in books.json, but unusable right now** (for example a blank
+     price, or an image that can't be downloaded): the script says "kept the
+     previous version" and leaves the book in the feed exactly as it was. It
+     isn't retired, because `NOTAVAILABLE` is permanent on Fruugo. If the same
+     book is also sold out, it still gets stock 0.
    - **Safety:** if more than half of the published books would disappear at
      once (for example a broken books.json), the script stops. Pass
      `--allow-mass-removal` if that is really what you want.

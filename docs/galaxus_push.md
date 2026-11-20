@@ -120,6 +120,7 @@ Connect by host name; use the IP addresses only for whitelisting.
 | `--dry-run` | Write `galaxus_feed.csv` only. No credentials needed, and nothing is uploaded. |
 | `--drop-sold-out` | Leave sold-out books out of the feed. By default they stay in it with stock 0. |
 | `--force` | Upload even if the feed didn't change. Also needed to upload an **empty** feed, which takes every offer offline. |
+| `--allow-mass-removal` | Allow taking more than half of the offers offline at once. Without it, the script stops when a run would remove most offers (for example because prices or ISBNs went missing in the source data). |
 | `--limit N` | Add at most N new offers this run. Offers already in the feed always stay. |
 | `--price-factor X` | Multiply source prices (for example `1.1` = +10 %) |
 | `--chf-rate X` | EUR → CHF rate for this run |
@@ -197,6 +198,9 @@ All three are in `.gitignore`.
 | `rejected the user name/password` | Wrong login | Fix the Bitwarden secrets. Don't retry many times, or your IP is blocked for 3 hours. |
 | `cannot connect to …` | Network, firewall, or IP block | Check port 22 outbound, or wait 3 hours after failed logins |
 | `upload of … failed after 3 tries` | The connection dropped during the upload | Run again. Nothing is recorded until an upload succeeds. |
+| `GALAXUS_PROVIDER is not set` | The provider name is part of the feed file name; without it a real upload would use a placeholder name Galaxus doesn't import | Set `GALAXUS_PROVIDER` (letters, digits, `_`, `-`) |
+| `Refusing: N of M offers ... would go offline` | Most books are missing or invalid in the products file (a scraper glitch?) | Check the products file. Use `--allow-mass-removal` only if that is right. |
+| `stock must be a whole number 0..99999` | A book has a text, negative or fractional `stock` | Fix the value; the book is skipped until then |
 | `The new feed is EMPTY` | No valid book (wrong file?) | Check the products file. Use `--force` only if you really want every offer offline. |
 | `Feed unchanged … nothing uploaded` | Normal | Nothing to do |
 | Offers missing on galaxus.ch | Galaxus has no catalog product for that ISBN, or rejected the line | Check Partner Portal → Katalog → Feeds |

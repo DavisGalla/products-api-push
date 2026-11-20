@@ -47,11 +47,14 @@ e-mail from the integration team), not through an API. Check them after the
 first publish.
 """
 import argparse
+import csv
 import hashlib
+import io
 import json
 import os
 import posixpath
 import re
+import socket
 import ssl
 import struct
 import sys
@@ -90,6 +93,8 @@ MIN_IMAGE_PX = 400            # Fruugo: at least 400 x 400 px
 REPUBLISH_AFTER_HOURS = 20    # publish again even if unchanged (Fruugo wants a fresh feed daily)
 NOTAVAILABLE_KEEP_DAYS = 30   # keep removed books as NOTAVAILABLE this long, then drop them
 MAX_REMOVED_SHARE = 0.5       # refuse to retire more than this share of published books at once
+CONNECT_TIMEOUT = 30          # seconds to reach the SFTP host
+IO_TIMEOUT = 120              # seconds a stalled SFTP transfer may wait before it fails
 # ======================================================================
 
 STATE_FILE = Path("fruugo_posted.json")     # one entry per SKU in the last published feed
@@ -305,7 +310,7 @@ class SftpTarget:
         if not pinned:
             raise PublishError("FRUUGO_SFTP_HOSTKEY must look like 'ssh-ed25519 AAAA...'")
         try:
-            t = pk.Transport((self.host, self.port))
+            t = pk.Transport(socket.create_connection((self.host, self.port), timeout=CONNECT_TIMEOUT))
             t.connect()                          # handshake only: check the host key before logging in
             key = t.get_remote_server_key()
             if not any(key.get_name() == k.get_name() and key.asbytes() == k.asbytes() for k in pinned):
@@ -323,6 +328,7 @@ class SftpTarget:
             raise PublishError(f"cannot connect to {self.host}:{self.port}: {e}")
         self.transport = t
         self.sftp = pk.SFTPClient.from_transport(t)
+        self.sftp.get_channel().settimeout(IO_TIMEOUT)      # a stalled transfer must fail, not hang the run
         return self.sftp
 
     def path(self, rel):
@@ -558,7 +564,10 @@ def settings_problems():
 def fetch_feed(url):
     """(status, sha256, rows, headers) of the feed at the public URL."""
     status, headers, data = http_get(url)
-    rows = max(0, data.count(b"\n") - 1)
+    try:   # descriptions contain line breaks inside quoted fields: count CSV records, not lines
+        rows = max(0, sum(1 for _ in csv.reader(io.StringIO(data.decode("utf-8", "replace"), newline=""))) - 1)
+    except csv.Error:
+        rows = max(0, data.count(b"\n") - 1)
     return status, hashlib.sha256(data).hexdigest(), rows, headers
 
 
@@ -636,6 +645,26 @@ def cmd_push(a):
         row, notes, files = build_row(p, a, base, download=not a.dry_run)
         if row is None:
             print(f"[{i}] SKIP '{p['title']}': " + "; ".join(notes))
+            if known:
+                # The book is still in the source, only its data is unusable right now (a blank price, an
+                # image that can't be downloaded). Keep what Fruugo already shows: retiring it would mark
+                # it NOTAVAILABLE, which Fruugo treats as permanently out of stock. A book that is sold
+                # out meanwhile still gets stock 0.
+                old = posted[p["sku"]]
+                kept = old["row"]
+                if p["sold_out"]:
+                    kept = retire(kept) if a.drop_sold_out else dict(kept, StockStatus="OUTOFSTOCK", StockQuantity=0, LeadTime="")
+                rows.append(kept)
+                entries[p["sku"]] = dict(old, row=kept, status=kept["StockStatus"], stock=kept["StockQuantity"],
+                                         updated_at=old.get("updated_at") if kept == old["row"] else now)
+                seen_sku.add(p["sku"])
+                if p["gtin"]:
+                    seen_code.add(p["gtin"])
+                for url in old.get("images", []):
+                    cached = IMAGE_CACHE / url.rsplit("/", 1)[-1]
+                    if cached.exists():
+                        images[cached.name] = cached
+                print(f"   -> kept the previous version of {p['sku']} in the feed")
             continue
         for n in notes:
             print(f"[{i}] note '{p['title']}': {n}")

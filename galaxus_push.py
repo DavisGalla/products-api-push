@@ -41,6 +41,7 @@ import hashlib
 import json
 import os
 import re
+import socket
 import sys
 import time
 from decimal import ROUND_HALF_UP, Decimal
@@ -62,6 +63,9 @@ DEFAULT_STOCK = 1            # stock when the product has no "stock"/"quantity" 
 # Feed file name as configured by Galaxus during onboarding. {provider} = GALAXUS_PROVIDER.
 FEED_FILE_NAME = "StockPricingData_{provider}.csv"
 REUPLOAD_AFTER_HOURS = 20    # upload again even if unchanged (Galaxus wants >= 1 update a day)
+MAX_REMOVED_SHARE = 0.5      # refuse to take more than this share of the offers offline at once
+CONNECT_TIMEOUT = 30         # seconds to reach the SFTP server
+IO_TIMEOUT = 120             # seconds a stalled SFTP transfer may wait before it fails
 # ======================================================================
 
 SFTP_HOST = "ftp.digitecgalaxus.ch"
@@ -114,7 +118,7 @@ class Sftp:
             return self.sftp
         pk = self.paramiko
         try:
-            transport = pk.Transport((self.host, self.port))
+            transport = pk.Transport(socket.create_connection((self.host, self.port), timeout=CONNECT_TIMEOUT))
             transport.connect()                     # handshake only: check the host key before the password
             server_key = transport.get_remote_server_key()
             if not any(server_key.get_name() == k.get_name() and server_key.asbytes() == k.asbytes()
@@ -131,6 +135,7 @@ class Sftp:
             raise TransferError(f"cannot connect to {self.host}:{self.port}: {e}")
         self.client = transport
         self.sftp = pk.SFTPClient.from_transport(transport)
+        self.sftp.get_channel().settimeout(IO_TIMEOUT)      # a stalled transfer must fail, not hang the daily run
         return self.sftp
 
     def path(self, name):
@@ -212,6 +217,10 @@ def feed_name():
 
 def normalize(raw):
     stock = raw.get("stock", raw.get("quantity"))
+    try:
+        stock = int(stock) if stock not in (None, "") else DEFAULT_STOCK
+    except (TypeError, ValueError):
+        stock = None                                   # reported by problems_of
     return {
         "sku": str(raw.get("sku") or raw.get("id") or ""),
         "title": (raw.get("title") or "").strip(),
@@ -219,7 +228,7 @@ def normalize(raw):
         "gtin": to_gtin(raw.get("isbn") or raw.get("ean")),
         "raw_code": raw.get("isbn") or raw.get("ean"),
         "condition": raw.get("condition") or "NewCondition",
-        "stock": int(stock) if stock not in (None, "") else DEFAULT_STOCK,
+        "stock": stock,
         "sold_out": raw.get("sold_out", False),
     }
 
@@ -238,6 +247,8 @@ def problems_of(p):
         probs.append(f"invalid ISBN/EAN '{p['raw_code']}'")
     if p["condition"] not in ALLOWED_CONDITIONS:
         probs.append(f"condition '{p['condition']}' is not offered on Galaxus (new goods only, see ALLOWED_CONDITIONS)")
+    if p["stock"] is None or not 0 <= p["stock"] <= 99999:
+        probs.append("stock must be a whole number 0..99999")
     return probs
 
 
@@ -321,12 +332,19 @@ def cmd_push(api, a):
     if a.dry_run:
         print(f"Dry run: feed written to {PREVIEW_FILE.resolve()} - nothing uploaded.")
         return
+    if not provider_name() and not os.environ.get("GALAXUS_FEED_NAME"):
+        sys.exit("GALAXUS_PROVIDER is not set (letters, digits, - and _ only). Without it the feed would be uploaded "
+                 f"as {feed_name()}, a name Galaxus does not import. Not uploading.")
     if digest == upload.get("sha256") and age_h < REUPLOAD_AFTER_HOURS and not a.force:
         print(f"Feed unchanged since the last upload {age_h:.1f}h ago - nothing uploaded (--force to upload anyway).")
         return
     if not rows and offers and not a.force:
         sys.exit("The new feed is EMPTY: this would take every offer offline at Galaxus. "
                  "Not uploading (pass --force if you really want that).")
+    if offers and len(removed) > MAX_REMOVED_SHARE * len(offers) and not a.allow_mass_removal:
+        sys.exit(f"Refusing: {len(removed)} of {len(offers)} offers ({', '.join(removed[:5])}"
+                 f"{', ...' if len(removed) > 5 else ''}) would go offline at Galaxus. A glitch in the source data "
+                 f"(prices or ISBNs missing) looks like this. If it is right, run again with --allow-mass-removal.")
     if not a.yes:
         if input(f"This replaces the LIVE Galaxus feed {feed_name()} ({len(rows)} offer(s)). Type 'yes': ").strip().lower() != "yes":
             return
@@ -383,6 +401,8 @@ def main():
                    help="leave sold-out books out of the feed (default: keep them with stock 0)")
     p.add_argument("--dry-run", action="store_true", help="write galaxus_feed.csv, upload nothing")
     p.add_argument("--force", action="store_true", help="upload even if the feed did not change")
+    p.add_argument("--allow-mass-removal", action="store_true",
+                   help=f"allow taking more than {int(MAX_REMOVED_SHARE * 100)} %% of the offers offline at once")
     p.add_argument("--limit", type=int, default=0, help="max new offers this run (0 = all)")
     p.add_argument("--yes", action="store_true", help="skip the confirmation prompt")
     sub.add_parser("status", help="what the last feed contained, and the file on the server")
