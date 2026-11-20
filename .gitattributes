@@ -1,0 +1,5 @@
+# Files used on Linux servers keep Linux line endings, also when edited on Windows.
+*.sh       text eol=lf
+*.service  text eol=lf
+*.timer    text eol=lf
+*.yml      text eol=lf

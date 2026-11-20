@@ -196,7 +196,8 @@ The full setup steps are in
 | Runtime | Python 3.8 or newer, `requests`, `bws` (Galaxus, and Fruugo's SFTP mode, also `paramiko`) |
 | Code | This repository, cloned on the server |
 | Configuration on the server | `push_all_config.json` and the Bitwarden access token (file with mode 600 on Linux, or a user environment variable on Windows) |
-| Schedule | Once a day, after the scraper. Linux: cron. Windows: Task Scheduler (commands in [push_all.md](push_all.md#running-it-on-a-server)). |
+| Schedule | `push_all.py` once a day after the scraper, `stock_sync.py` every 15 minutes. Linux: systemd timers installed by `deploy/setup_server.sh` (guide: [deployment.md](deployment.md)); Windows: Task Scheduler. |
+| Server setup | `deploy/setup_server.sh` (Ubuntu / Debian): service user `pushers`, code in `/opt/product-pushers` with its own Python environment, `bws` (checksum-verified), token file `/etc/product-pushers.token`, two timers. Re-running it updates everything. CI runs it on a fresh Ubuntu machine on every push. |
 | Input | The scraper must run on the same server, or copy `books.json` to it before the push |
 
 ## Error handling and monitoring

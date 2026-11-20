@@ -1,0 +1,10 @@
+[Unit]
+Description=Product pushers: stock sync every @SYNC_EVERY@ minutes
+
+[Timer]
+OnCalendar=*:0/@SYNC_EVERY@
+# a missed run is simply done at the next interval
+Persistent=false
+
+[Install]
+WantedBy=timers.target

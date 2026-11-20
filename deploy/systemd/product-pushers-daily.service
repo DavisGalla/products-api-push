@@ -1,0 +1,19 @@
+[Unit]
+Description=Product pushers: daily run of all pushers + email report
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=@APP_USER@
+Group=@APP_USER@
+WorkingDirectory=@APP_DIR@
+ExecStart=/bin/bash @APP_DIR@/deploy/run.sh push_all
+TimeoutStartSec=8h
+Nice=5
+# exit code 1 = a pusher failed (the email says which); 2 = the email could not be sent
+SuccessExitStatus=1
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only

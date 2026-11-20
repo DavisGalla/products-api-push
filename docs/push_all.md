@@ -346,14 +346,17 @@ the report email couldn't be sent. A scheduler can alert on non-zero.
 
 ## Running it on a server
 
-1. Copy the repository to the server, and add `push_all_config.json`.
-2. Install `bws`, and give the server its own machine-account token (see
-   [Bitwarden](#recommended-bitwarden-secrets-manager)).
-3. Make sure the products JSON is on the same machine: either run the scraper
-   there too, or copy its output across.
-4. Schedule the run.
+**Linux server: see [deployment.md](deployment.md).** One script
+(`deploy/setup_server.sh`) installs everything:
 
-**Linux (cron)**, daily at 06:00, after the scraper:
+- Python and `bws`
+- a service user and the token file
+- systemd timers: `push_all` daily, the stock sync every 15 minutes
+
+The guide covers the whole setup step by step, and CI tests the script on a
+fresh Ubuntu machine.
+
+Plain cron works too, if you prefer it (daily at 06:00, after the scraper):
 
 ```
 0 6 * * * cd /opt/product-pushers && BWS_ACCESS_TOKEN="$(cat /etc/product-pushers.token)" /usr/local/bin/bws run -- /usr/bin/python3 push_all.py >> logs/cron.log 2>&1

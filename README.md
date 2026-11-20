@@ -633,6 +633,18 @@ accepted automatically when the stock covers them (a double sale never is),
 and the daily email gets an **Orders** section listing every new order, with
 the ones that need you (double sales, orders to accept by hand) first.
 
+## Run it on a server
+
+`deploy/setup_server.sh` sets up a small Linux server (Ubuntu / Debian) in one
+go: the daily `push_all` run and the stock sync every 15 minutes, as systemd
+timers, with credentials from Bitwarden. Step by step:
+[docs/deployment.md](docs/deployment.md).
+
+```bash
+git clone https://github.com/DavisGalla/products-api-push.git /tmp/pushers-setup
+TIMEZONE=Europe/Madrid bash /tmp/pushers-setup/deploy/setup_server.sh
+```
+
 ## Run everything and get an email report
 
 Credentials (Gmail and the marketplaces) are stored in **Bitwarden Secrets

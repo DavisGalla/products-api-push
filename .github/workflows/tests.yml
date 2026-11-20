@@ -1,6 +1,7 @@
 # Runs every test suite (all against local mock APIs, no credentials needed)
 # on each push and pull request, on Windows (where the scripts are developed)
-# and Ubuntu (what a Linux server would run).
+# and Ubuntu (what a Linux server runs), and installs the whole thing on a
+# fresh Ubuntu machine with deploy/setup_server.sh (the real server setup).
 name: tests
 
 on:
@@ -29,3 +30,39 @@ jobs:
         run: python -m pip install -r requirements.txt
       - name: Run all test suites
         run: python tests/run_all.py
+
+  server-setup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell scripts are valid
+        run: bash -n deploy/setup_server.sh && bash -n deploy/run.sh
+      - name: Run the server setup on a fresh machine
+        run: |
+          sudo git config --system --add safe.directory '*'
+          sudo REPO_URL="$GITHUB_WORKSPACE" TIMEZONE=Europe/Madrid bash deploy/setup_server.sh
+      - name: Timers are installed and active
+        run: |
+          systemctl is-enabled product-pushers-daily.timer product-pushers-stock-sync.timer
+          systemctl is-active product-pushers-daily.timer product-pushers-stock-sync.timer
+          systemctl cat product-pushers-daily.service | grep -q "ExecStart=/bin/bash /opt/product-pushers/deploy/run.sh push_all"
+          command -v bws && bws --version
+      - name: Jobs run as the service user (dry run, no credentials)
+        run: |
+          cd /opt/product-pushers
+          sudo -u pushers python3 - <<'EOF'
+          import json
+          c = json.load(open("push_all_config.json"))
+          c["json_file"] = "tests/test_products.json"
+          c["stock_sync"] = {"enabled": True}
+          c["pushers"]["kaufland"]["enabled"] = True
+          json.dump(c, open("push_all_config.json", "w"), indent=2)
+          EOF
+          sudo -u pushers touch .env
+          sudo -u pushers ./deploy/run.sh push_all --dry-run --no-email | tee /tmp/push_all.txt
+          grep -q "Stock sync" /tmp/push_all.txt
+          grep -q "Kaufland" /tmp/push_all.txt
+          sudo systemctl start product-pushers-stock-sync.service
+          systemctl show product-pushers-stock-sync.service -p Result | grep -q "Result=success"
+          sudo journalctl -u product-pushers-stock-sync.service --no-pager | tail -20

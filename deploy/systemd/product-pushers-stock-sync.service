@@ -1,0 +1,16 @@
+[Unit]
+Description=Product pushers: stock sync (new orders -> stock 0 elsewhere, accept orders)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=@APP_USER@
+Group=@APP_USER@
+WorkingDirectory=@APP_DIR@
+ExecStart=/bin/bash @APP_DIR@/deploy/run.sh stock_sync sync
+TimeoutStartSec=30min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only

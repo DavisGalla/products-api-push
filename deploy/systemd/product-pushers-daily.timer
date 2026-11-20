@@ -1,0 +1,10 @@
+[Unit]
+Description=Product pushers: daily run at @DAILY_TIME@
+
+[Timer]
+OnCalendar=*-*-* @DAILY_TIME@:00
+# if the server was off at that time, run as soon as it is back
+Persistent=true
+
+[Install]
+WantedBy=timers.target
