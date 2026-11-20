@@ -27,8 +27,8 @@ without credentials is skipped.
 
 USAGE (with Bitwarden: put "bws run --" in front)
     python stock_sync.py sync                 # read orders, update stock everywhere
-    python stock_sync.py sync --dry-run       # read orders, show what would change, change nothing
-    python stock_sync.py sync --no-apply      # read orders + write books_synced.json only
+    python stock_sync.py sync --dry-run       # read orders, pushers in safe mode: nothing sent or accepted, ledger not saved
+    python stock_sync.py sync --no-apply      # read orders + write books_synced.json: nothing sent or accepted
     python stock_sync.py status               # sales in the ledger, books with reduced stock
 
 Run it often (e.g. every 15 minutes, see docs/stock_sync.md). push_all.py runs
@@ -156,6 +156,7 @@ def state_file(name):
 
 
 LEDGER = {}        # the ledger of the current run, for readers that page by order id (Vinted)
+POOL = {}          # sku -> stock pool, set by compute(): books that share an ISBN are one stock
 
 
 # --------------------------------------------------------------------- readers
@@ -213,6 +214,7 @@ def read_amazon(since):
 def read_ebay(since):
     mod = importlib.import_module("ebay_push")
     eb = mod.Ebay(False, "EBAY_ES")
+    eb.check_keys()                                     # sandbox keys must never be sent to the real eBay
     eb.token = eb._token_call({"grant_type": "refresh_token", "refresh_token": os.environ["EBAY_REFRESH_TOKEN"],
                                "scope": EBAY_FULFILLMENT_SCOPE})
     out, offset = [], 0
@@ -559,16 +561,27 @@ def counts(sale_, snapshot):
 
 
 def compute(products, sales, snapshot):
-    """Returns (synced products, {sku: (source, sold, available)})."""
+    """Returns (synced products, {sku: (source, sold, available)}).
+
+    Books that share an ISBN are one stock pool: marketplaces match offers by ISBN/EAN, so a copy sold under
+    one SKU is gone for its twin SKU too (the same book listed twice, as the scraper once did).
+    """
+    POOL.clear()
+    for p in products:
+        sku = sku_of(p)
+        if sku:
+            g = to_gtin(p.get("isbn") or p.get("ean"))
+            POOL[sku] = f"gtin:{g}" if g else sku
     sold = {}
     for s in sales.values():
         if counts(s, snapshot):
-            sold[s["sku"]] = sold.get(s["sku"], 0) + s["qty"]
+            key = POOL.get(s["sku"], s["sku"])
+            sold[key] = sold.get(key, 0) + s["qty"]
     synced, info = [], {}
     for p in products:
         sku = sku_of(p)
         src = source_stock(p)
-        n = sold.get(sku, 0)
+        n = sold.get(POOL.get(sku, sku), 0)
         avail = max(src - n, 0)
         q = dict(p)
         if n:
@@ -607,12 +620,15 @@ def accept_order(channel, order_id, lines):
 def handle_orders(ledger, info, titles, snapshot, a):
     """Which sales the stock covers (first come, first served), accept covered orders, flag double sales."""
     sales = ledger["sales"]
-    by_sku = {}
+    by_pool = {}
     for s in sales.values():
         if not s["cancelled"] and counts(s, snapshot):
-            by_sku.setdefault(s["sku"], []).append(s)
-    for sku, rows in by_sku.items():
-        src = info.get(sku, (None,))[0]
+            by_pool.setdefault(POOL.get(s["sku"], s["sku"]), []).append(s)
+    for key, rows in by_pool.items():
+        # books with the same ISBN share their copies: the pool holds as many as its best-stocked member
+        members = [m for m, k in POOL.items() if k == key and m in info] or [rows[0]["sku"]]
+        srcs = [info[m][0] for m in members if m in info]
+        src = max(srcs) if srcs else None
         used = 0
         for s in sorted(rows, key=lambda x: (x["at"], x["key"])):
             used += s["qty"]
@@ -637,8 +653,8 @@ def handle_orders(ledger, info, titles, snapshot, a):
             for s in lines:
                 s["accept_error"] = "accept it in the marketplace's seller portal"
             continue
-        if a.dry_run:
-            print(f"   (dry run) would accept {channel} order {order_id}")
+        if a.dry_run or getattr(a, "no_apply", False):      # --no-apply promises that nothing is sent anywhere
+            print(f"   ({'dry run' if a.dry_run else '--no-apply'}) would accept {channel} order {order_id}")
             continue
         try:
             err = accept_order(channel, order_id, lines)
@@ -748,9 +764,14 @@ def cmd_sync(a):
     path = products_file(a)
     if not path.exists():
         sys.exit(f"Products file not found: {path}")
-    products = load_json(path, [])
+    products = load_json(path, None)
     if isinstance(products, dict):
         products = products.get("products", [])
+    if not isinstance(products, list) or not products:
+        # A half-written file (the scraper is saving it right now) must not count as an empty catalogue:
+        # that would overwrite books_synced.json with nothing. The next run reads the finished file.
+        sys.exit(f"Products file {path} is unreadable or has no books (is the scraper writing it right now?). "
+                 f"Nothing was changed.")
     snapshot = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).replace(microsecond=0)
     ledger = load_json(LEDGER_FILE, {})
     ledger.setdefault("cursors", {})
@@ -837,14 +858,19 @@ def cmd_sync(a):
         return
     results = run_pushers(changed, synced, a)
     bad = [r for r in results if r[1] in ("FAILED",)]
+    # A pusher that exits normally but reports problems ("! stock update failed: 429") did not zero every book:
+    # its changes must be sent again too, or that marketplace keeps selling a copy that is gone.
+    retry = [r for r in results if r[1] in ("FAILED", "PROBLEMS")]
     for name, status, note in results:
         print(f"   {name:<14} {status:<15} {note}")
     if not a.dry_run:
-        remember(include_changed=not bad)             # failed: send the same changes again next run
+        remember(include_changed=not retry)           # failed or problems: send the same changes again next run
         save_json(LEDGER_FILE, ledger)
     if bad:
         print(f"! {len(bad)} pusher(s) failed; the stock changes are sent again on the next run.")
         sys.exit(1)
+    if retry:
+        print(f"! {', '.join(r[0] for r in retry)} reported problems; the stock changes are sent again on the next run.")
     print("Stock synced." if not a.dry_run else "Dry run: nothing changed.")
 
 
@@ -874,8 +900,8 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("sync", help="read orders, update stock on every marketplace")
     s.add_argument("--source", help="products JSON (default: json_file from push_all_config.json)")
-    s.add_argument("--dry-run", action="store_true", help="pushers run in their safe mode; ledger not saved")
-    s.add_argument("--no-apply", action="store_true", help="only read orders and write books_synced.json")
+    s.add_argument("--dry-run", action="store_true", help="pushers run in their safe mode; nothing is sent or accepted; ledger not saved")
+    s.add_argument("--no-apply", action="store_true", help="only read orders and write books_synced.json; nothing is sent to a marketplace or accepted")
     s.add_argument("--verbose", action="store_true", help="show every pusher's output")
     st = sub.add_parser("status", help="sales in the ledger and stock sent")
     st.add_argument("--source", help="products JSON (default: json_file from push_all_config.json)")

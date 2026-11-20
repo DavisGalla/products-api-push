@@ -182,9 +182,10 @@ class Ebay:
             raise RuntimeError(f"token error {r.status_code}: {r.text}")
         return r.json()["access_token"]
 
-    def login(self):
-        # eBay puts -SBX- (sandbox) or -PRD- (production) in the App ID. Stop on a mix-up, e.g. sandbox
-        # keys leaking into a real run through a Bitwarden machine account that can read both projects.
+    def check_keys(self):
+        """eBay puts -SBX- (sandbox) or -PRD- (production) in the App ID. Stop on a mix-up, e.g. sandbox
+        keys leaking into a real run through a Bitwarden machine account that can read both projects.
+        Called before anything is sent to eBay (also by stock_sync's order reader)."""
         cid = os.environ.get("EBAY_CLIENT_ID", "")
         if "-SBX-" in cid and not self.sandbox:
             sys.exit("EBAY_CLIENT_ID is a SANDBOX key (it contains '-SBX-') but this is a real run. "
@@ -192,6 +193,9 @@ class Ebay:
         if "-PRD-" in cid and self.sandbox:
             sys.exit("EBAY_CLIENT_ID is a PRODUCTION key (it contains '-PRD-') but --sandbox was given. "
                      "Use the sandbox keys. Nothing was sent to eBay.")
+
+    def login(self):
+        self.check_keys()
         self.token = self._token_call({
             "grant_type": "refresh_token",
             "refresh_token": os.environ["EBAY_REFRESH_TOKEN"],

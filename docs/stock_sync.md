@@ -55,9 +55,19 @@ describes how it behaves today.
    When stock comes back, or drops but isn't 0, `--resend` is added for
    pushers that support it. That puts the stock back, for example after a
    cancellation.
-5. **Failures are retried.** If a pusher fails, the same stock changes are
-   sent again on the next run. A marketplace whose orders can't be read is
-   reported, and the others still run.
+5. **Failures are retried.** If a pusher fails, or finishes but reports
+   problems (for example `! stock update failed: 429`), the same stock changes
+   are sent again on the next run, so a marketplace is never left selling a
+   copy that is gone. A marketplace whose orders can't be read is reported,
+   and the others still run.
+6. **Books with the same ISBN are one stock.** Marketplaces match offers by
+   ISBN, so a copy sold under one SKU takes down every other SKU with that
+   ISBN, and a second sale of such a twin is a double sale. If one of the
+   twins really has two copies, the pool holds two.
+7. **An unreadable products file stops the run.** If `books.json` is cut off
+   (the scraper is saving it right now), is empty, or isn't JSON, nothing is
+   changed and `books_synced.json` is kept. The next run reads the finished
+   file.
 
 ## Which marketplaces
 
@@ -170,15 +180,23 @@ handled or cancelled.
 
 ```powershell
 bws run -- python stock_sync.py sync              # read orders, update stock everywhere
-bws run -- python stock_sync.py sync --dry-run    # pushers run in their safe mode; ledger not saved
-bws run -- python stock_sync.py sync --no-apply   # read orders, write books_synced.json only
+bws run -- python stock_sync.py sync --dry-run    # pushers run in their safe mode; nothing sent, ledger not saved
+bws run -- python stock_sync.py sync --no-apply   # read orders, write books_synced.json; nothing sent, nothing accepted
 bws run -- python stock_sync.py sync --verbose    # also show every pusher's output
 python stock_sync.py status                       # cursors, sales that still count, stock sent
 ```
 
 `--source FILE` uses another products file. The default is `json_file` from
 `push_all_config.json`. The sync and `push_all.py` share one lock, so they
-never run at the same time.
+never run at the same time. A lock left by a run that was killed (a timeout,
+a reboot) is taken over at once; a lock held by a running process blocks for
+at most 6 hours.
+
+Both `--dry-run` and `--no-apply` still write the local file `books_synced.json`
+(and `--dry-run` also `books_sync_changes.json`), because `push_all.py` reads
+`books_synced.json` right after the sync, also in its own dry run. `--no-apply`
+also saves the ledger; `--dry-run` doesn't. Neither sends anything to a
+marketplace or accepts an order.
 
 ## Running it regularly
 

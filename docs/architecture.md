@@ -248,12 +248,14 @@ credentials, and doesn't contact any real API:
 | `test_onbuy.py` | OnBuy API v2 (token renewal, barcode search in 50s, batch listings with per-row errors, by-sku update/delete, several sites, check-winning, 429) | 21 |
 | `test_stock_sync.py` | Order APIs: Mirakl OR11, Amazon Orders v2026-01-01, eBay Fulfillment, Kaufland order units; ledger, cancellations, settle rule, pusher commands, push_all integration | 26 |
 | `test_order_readers.py` | Order readers for bol.com, Cdiscount, Allegro, OTTO, eMAG, CDON, OnBuy, booklooker, Fruugo, Vinted, Temu, TikTok (filters, paging, SKU/EAN mapping, cancellations) | 27 |
-| `test_orders.py` | Order handling: automatic accept (Mirakl OR21 mock, Cdiscount, eMAG), double sales, by-hand orders, email Orders section | 12 |
+| `test_orders.py` | Order handling: automatic accept (Mirakl OR21 mock, Cdiscount, eMAG), double sales, by-hand orders, email Orders section, `--no-apply` accepts nothing | 13 |
 | `test_push_all.py` | Fake pushers + fake mail server (incl. log cleanup) | 25 |
 | `test_sandbox_state.py` | Each pusher with a sandbox mode keeps its own state, token and cache files, never the real ones | 17 |
 | `test_dry_run_offline.py` | Every pusher's `push --dry-run` works with no credentials | 23 |
+| `test_lock.py` | The lock file: a run that was killed no longer blocks later runs (real child processes, a hard kill), a live run still does | 12 |
+| `test_stock_safety.py` | Stock sync safety: a pusher that reports problems is retried, an unreadable books.json stops the run, books with the same ISBN are one stock, the eBay reader refuses sandbox keys | 24 |
 | `test_book_data.py` | The shared price reader (`book_data.clean_price`): text prices, bad input, zero and negative | 55 |
-| **Total** | | **815, all passing** |
+| **Total** | | **852, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.

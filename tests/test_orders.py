@@ -119,7 +119,9 @@ def run(tmp):
     lines += [ss.sale("amazon", "amazon:A1:1", "D", 1, False, t0, order="A1")]
     lines[1]["at"] = ss.iso(ss.utcnow().replace(microsecond=0)) if lines[1]["at"] <= t0 else lines[1]["at"]
     ss.readers = lambda: [("all", lambda since: [dict(x) for x in lines], [])]
-    args = lambda **k: argparse.Namespace(source=str(books), dry_run=k.get("dry", False), no_apply=True, verbose=False)
+    ss.run_pushers = lambda changed, synced, a: []          # no pusher is started here, only the order handling
+    args = lambda **k: argparse.Namespace(source=str(books), dry_run=k.get("dry", False),
+                                          no_apply=k.get("no_apply", False), verbose=False)
 
     def sync(**k):
         buf = io.StringIO()
@@ -132,6 +134,10 @@ def run(tmp):
 
     out = sync(dry=True)
     ok(not ACCEPTS and "(dry run) would accept" in out, "dry run: accepts are only shown")
+
+    out = sync(no_apply=True)
+    ok(not ACCEPTS and "(--no-apply) would accept" in out,
+       "--no-apply: nothing is sent to a marketplace, accepts are only shown")
 
     Mirakl.fail_next = True
     out = sync()

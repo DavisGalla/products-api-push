@@ -191,15 +191,50 @@ def prune_logs(keep_days):
     return removed
 
 
+def pid_alive(pid):
+    """Is a process with this id running? On Windows os.kill(pid, 0) would END the process, so ask Windows."""
+    if pid <= 0:
+        return False
+    if os.name == "nt":
+        import ctypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        handle = kernel.OpenProcess(0x1000, False, pid)            # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.get_last_error() == 5                    # access denied: it exists, it's just not ours
+        code = ctypes.c_ulong()
+        ok = kernel.GetExitCodeProcess(handle, ctypes.byref(code))
+        kernel.CloseHandle(handle)
+        return bool(ok) and code.value == 259                      # STILL_ACTIVE
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True                                                # e.g. permission denied: it exists
+    return True
+
+
 def take_lock():
+    """One run at a time. A lock left by a run that was killed (timeout, reboot) is taken over at once; a lock
+    held by a live process blocks for at most LOCK_MAX_AGE."""
     try:
         fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
     except FileExistsError:
-        if time.time() - LOCK_FILE.stat().st_mtime < LOCK_MAX_AGE:
+        age = time.time() - LOCK_FILE.stat().st_mtime
+        try:
+            holder = int(LOCK_FILE.read_text(encoding="utf-8").strip())
+        except (OSError, ValueError):
+            holder = None                                          # unreadable: judge by age only
+        if age < LOCK_MAX_AGE and (holder is None or pid_alive(holder)):
             sys.exit(f"Another push_all run is in progress ({LOCK_FILE.name} exists). "
                      f"Delete it if that run crashed.")
-        LOCK_FILE.unlink()
-        fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        if holder is not None and not pid_alive(holder):
+            print(f"(removed {LOCK_FILE.name} left by run {holder}, which is no longer running)")
+        LOCK_FILE.unlink(missing_ok=True)
+        try:
+            fd = os.open(LOCK_FILE, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        except FileExistsError:
+            sys.exit(f"Another push_all run has just started ({LOCK_FILE.name} exists).")
     os.write(fd, str(os.getpid()).encode())
     os.close(fd)
 

@@ -221,7 +221,7 @@ def test_push_all():
         rc, out = run(tmp, "--only", "vinted", "--dry-run", "--no-email")
         check("--dry-run passes the safe-mode flag", "--validate-only" in out and "DRY RUN" in out, out[-400:])
 
-        (tmp / "push_all.lock").write_text("123")
+        (tmp / "push_all.lock").write_text(str(os.getpid()))          # held by a live process (this test)
         rc, out = run(tmp, "--only", "vinted", "--no-email")
         check("a second run at the same time is refused", rc != 0 and "in progress" in out, out[-300:])
         (tmp / "push_all.lock").unlink()

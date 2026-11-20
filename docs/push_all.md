@@ -374,8 +374,10 @@ any pusher starts. No report email can be sent in that case, because the Gmail
 password comes from Bitwarden too, so watch the scheduler's exit code or
 `logs/cron.log`.
 
-`push_all.py` uses a lock file, so two runs can't overlap and push twice. A
-lock older than 6 hours is treated as left over from a crash.
+`push_all.py` uses a lock file, so two runs can't overlap and push twice. The
+file holds the process id of the run. A lock whose run is no longer running
+(it was killed, or the server rebooted) is taken over at once. A lock held by
+a running process blocks for at most 6 hours.
 
 ## Result statuses
 
