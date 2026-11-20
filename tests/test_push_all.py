@@ -195,8 +195,9 @@ def test_push_all():
         text, htm = body_of(msg, "plain"), body_of(msg, "html")
         check("report goes to every address in config email.to",
               rcpts == ["boss@example.com", "me@example.com"], str(rcpts))
-        check("subject sums it up", subject == "[Product push] FAILED - 3 pushed, 1 rejected, failed: Fnac, AbeBooks / IberLibro",
-              subject)
+        check("subject sums it up (and names a marketplace that is switched on but did not run)",
+              subject == "[Product push] FAILED - 3 pushed, 1 rejected, failed: Fnac, AbeBooks / IberLibro, "
+                         "not configured: Casa del Libro", subject)
         check("Vinted: 2 pushed, 1 skipped, 1 already listed",
               "Vinted" in text and "2 pushed, 1 skipped, 1 already listed" in text, text)
         check("Amazon: 1 pushed, rejection shown with its reason",

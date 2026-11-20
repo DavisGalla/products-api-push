@@ -151,8 +151,10 @@ def load_env_file(path):
         if key.startswith("export "):
             key = key[7:].strip()
         value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
-            value = value[1:-1]
+        if value[:1] in ("'", '"') and value[0] in value[1:]:
+            value = value[1:value.index(value[0], 1)]          # quoted: everything up to the closing quote
+        else:
+            value = re.split(r"\s+#", value, maxsplit=1)[0].strip()   # unquoted: a trailing "# comment" is not part of it
         if key and key not in os.environ:
             os.environ[key] = value
             loaded.append(key)
@@ -169,6 +171,53 @@ def load_config():
         sys.exit(f"Unknown pusher(s) in {CONFIG_FILE.name}: {', '.join(sorted(unknown))}. "
                  f"Known: {', '.join(PUSHERS)}")
     return cfg
+
+
+def config_problems(cfg):
+    """Mistakes in push_all_config.json, found before anything runs (a typo must not stop a run half way)."""
+    probs = []
+
+    def number(v, zero_ok=False):
+        return isinstance(v, (int, float)) and not isinstance(v, bool) and (v >= 0 if zero_ok else v > 0)
+
+    if not isinstance(cfg, dict):
+        return ["the file must contain one JSON object"]
+    if "json_file" in cfg and not isinstance(cfg["json_file"], str):
+        probs.append('"json_file" must be a path in quotes')
+    if "timeout_minutes" in cfg and not number(cfg["timeout_minutes"]):
+        probs.append('"timeout_minutes" must be a number of minutes above 0')
+    if "log_keep_days" in cfg and not number(cfg["log_keep_days"], zero_ok=True):
+        probs.append('"log_keep_days" must be a number of days (0 = keep every log)')
+    email = cfg.get("email", {})
+    if not isinstance(email, dict):
+        probs.append('"email" must be an object like {"to": [...], "when": "always"}')
+    else:
+        if "when" in email and email["when"] not in ("always", "problems"):
+            probs.append('"email.when" must be "always" or "problems"')
+        if "to" in email and not isinstance(email["to"], (str, list)):
+            probs.append('"email.to" must be an address or a list of addresses')
+    sync = cfg.get("stock_sync", {})
+    if not isinstance(sync, dict):
+        probs.append('"stock_sync" must be an object like {"enabled": true}')
+    else:
+        if "on_failure" in sync and sync["on_failure"] not in ("skip", "continue"):
+            probs.append('"stock_sync.on_failure" must be "skip" or "continue"')
+        if "every_minutes" in sync and not number(sync["every_minutes"]):
+            probs.append('"stock_sync.every_minutes" must be a number of minutes above 0')
+    pushers = cfg.get("pushers", {})
+    if not isinstance(pushers, dict):
+        return probs + ['"pushers" must be an object']
+    for name, s in pushers.items():
+        if not isinstance(s, dict):
+            probs.append(f'pushers.{name} must be an object like {{"enabled": true, "args": []}}')
+            continue
+        if "enabled" in s and not isinstance(s["enabled"], bool):
+            probs.append(f'pushers.{name}.enabled must be true or false (without quotes)')
+        if "args" in s and not (isinstance(s["args"], list) and all(isinstance(x, (str, int, float)) for x in s["args"])):
+            probs.append(f'pushers.{name}.args must be a list like ["--markets", "all"]')
+        if "timeout_minutes" in s and not number(s["timeout_minutes"]):
+            probs.append(f'pushers.{name}.timeout_minutes must be a number of minutes above 0')
+    return probs
 
 
 def prune_logs(keep_days):
@@ -243,9 +292,10 @@ def take_lock():
 
 def read_state(path):
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
+    return data if isinstance(data, dict) else {}
 
 
 def build_command(spec, settings, json_file, dry_run):
@@ -269,12 +319,20 @@ def required_env(name, spec, settings):
     return names
 
 
+def failure_result(name, label, note):
+    """A FAILED row for something that could not run (or crashed), so it shows in the report and the subject."""
+    return {"name": name, "label": label, "pushed": 0, "skipped": 0, "already": 0, "problems": [], "tail": [],
+            "exit_code": None, "seconds": 0, "log": None, "status": "FAILED", "note": note}
+
+
 def run_pusher(name, spec, settings, cfg, a, log_dir):
     res = {"name": name, "label": spec["label"], "pushed": 0, "skipped": 0, "already": 0,
            "problems": [], "tail": [], "exit_code": None, "seconds": 0, "log": None}
     missing = [k for k in required_env(name, spec, settings) if not os.environ.get(k)]
-    # dry runs of these pushers build their files without credentials
-    if missing and not (a.dry_run and name in ("fnac", "abebooks", "ebay", "kaufland", "galaxus", "otto", "emag", "fruugo", "cdon", "onbuy")):
+    # A dry run with --dry-run only writes the pusher's preview files and needs no credentials. Vinted and Amazon
+    # validate against the API (--validate-only), so they do need them.
+    offline_dry = a.dry_run and spec["dry"] == ["--dry-run"]
+    if missing and not offline_dry:
         res.update(status="NOT CONFIGURED", note="missing " + ", ".join(missing))
         return res
 
@@ -321,9 +379,9 @@ def run_pusher(name, spec, settings, cfg, a, log_dir):
     return res
 
 
-def run_stock_sync(cfg, a, log_dir):
+def run_stock_sync(cfg, a, log_dir, tag="stock_sync", label="Stock sync"):
     """stock_sync.py first (inside our lock): new orders -> books_synced.json + stock 0 everywhere."""
-    res = {"name": "stock_sync", "label": "Stock sync", "pushed": 0, "skipped": 0, "already": 0,
+    res = {"name": tag, "label": label, "pushed": 0, "skipped": 0, "already": 0,
            "problems": [], "tail": [], "exit_code": None, "seconds": 0, "log": None}
     cmd = [sys.executable, str(BASE / "stock_sync.py"), "sync"]
     if cfg.get("json_file"):
@@ -332,7 +390,7 @@ def run_stock_sync(cfg, a, log_dir):
         cmd.append("--dry-run")
     env = dict(os.environ, PYTHONIOENCODING="utf-8", PYTHONUNBUFFERED="1", PUSH_ALL_RUNNING="1")
     start = time.time()
-    print(f"\n=== Stock sync: {' '.join(cmd[1:])}", flush=True)
+    print(f"\n=== {label}: {' '.join(cmd[1:])}", flush=True)
     try:
         r = subprocess.run(cmd, cwd=BASE, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                            stderr=subprocess.STDOUT, timeout=float(cfg.get("timeout_minutes", 60)) * 60,
@@ -342,7 +400,7 @@ def run_stock_sync(cfg, a, log_dir):
         output, res["exit_code"] = "", "timeout"
     res["seconds"] = round(time.time() - start)
     print(output, end="" if output.endswith("\n") else "\n", flush=True)
-    log = log_dir / "stock_sync.log"
+    log = log_dir / f"{tag}.log"
     log.write_text(f"$ {' '.join(cmd)}\n\n{output}", encoding="utf-8")
     res["log"] = log
     lines = output.splitlines()
@@ -359,7 +417,7 @@ def run_stock_sync(cfg, a, log_dir):
 # ---------------------------------------------------------------- report
 
 def summary_line(r):
-    if r["status"] in ("NOT CONFIGURED", "DISABLED") or r.get("name") == "stock_sync":
+    if r["status"] in ("NOT CONFIGURED", "DISABLED") or str(r.get("name", "")).startswith("stock_sync"):
         return r["note"]
     parts = [f"{r['pushed']} pushed"]
     if r["problems"]:
@@ -383,6 +441,11 @@ def subject_of(results, dry_run):
         bits.append(f"{problems} rejected")
     if failed:
         bits.append("failed: " + ", ".join(failed))
+    # a marketplace that is switched on but did not run (a credential went missing) must not look like a normal day
+    unconfigured = [r["label"] for r in results if r["status"] == "NOT CONFIGURED"]
+    if unconfigured:
+        bits.append("not configured: " + ", ".join(unconfigured))
+        worst = "FAILED" if failed else "PROBLEMS"
     need = sum(1 for r in orders_rows() if r["needs_you"])
     if need:
         bits.append(f"{need} order(s) need you")
@@ -509,6 +572,19 @@ def send_email(subject, text, html_body, attachments=()):
 
 # ------------------------------------------------------------------ main
 
+LOG_HEAD_CHARS = 2000        # of each pusher's log, the email carries the first part (the command)...
+LOG_TAIL_CHARS = 300_000     # ...and the last part; the rest stays in logs/ (Gmail refuses mail over 25 MB)
+
+
+def log_for_email(path):
+    text = path.read_text(encoding="utf-8")
+    if len(text) <= LOG_HEAD_CHARS + LOG_TAIL_CHARS:
+        return text
+    cut = len(text) - LOG_HEAD_CHARS - LOG_TAIL_CHARS
+    return (text[:LOG_HEAD_CHARS] + f"\n[... {cut} characters cut to keep the email small; the full log is {path} ...]\n"
+            + text[-LOG_TAIL_CHARS:])
+
+
 def main():
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -531,6 +607,9 @@ def main():
         return
 
     cfg = load_config()
+    probs = config_problems(cfg)
+    if probs:
+        sys.exit(f"Settings problems in {CONFIG_FILE.name}:\n  - " + "\n  - ".join(probs))
     if cfg.get("email", {}).get("to") and not os.environ.get("REPORT_TO"):
         to = cfg["email"]["to"]
         os.environ["REPORT_TO"] = ",".join(to) if isinstance(to, list) else str(to)
@@ -547,19 +626,49 @@ def main():
         log_dir = LOG_DIR / time.strftime("%Y-%m-%d_%H%M%S")
         log_dir.mkdir(parents=True, exist_ok=True)
         results = []
-        if cfg.get("stock_sync", {}).get("enabled") and only is None:
+        sync_cfg = cfg.get("stock_sync", {})
+        sync_on = bool(sync_cfg.get("enabled")) and only is None
+        resync_every = float(sync_cfg.get("every_minutes", 15)) * 60
+        synced = Path(os.environ.get("STOCK_SYNC_DIR") or BASE) / "books_synced.json"
+        todo = [(name, spec, cfg.get("pushers", {}).get(name, {})) for name, spec in PUSHERS.items()
+                if (name in only if only is not None else cfg.get("pushers", {}).get(name, {}).get("enabled"))]
+        stop = None                                  # why no pusher may run today, if that is the case
+        products = cfg.get("json_file")
+        if products and not Path(products).exists():
+            stop = f"products file not found: {products}"
+            results.append(failure_result("products_file", "Products file", f"not found: {products}"))
+        elif sync_on:
+            t0 = time.time()
             sync = run_stock_sync(cfg, a, log_dir)
             results.append(sync)
-            synced = Path(os.environ.get("STOCK_SYNC_DIR") or BASE) / "books_synced.json"
-            if sync["status"] != "FAILED" and synced.exists():
-                cfg = dict(cfg, json_file=str(synced))     # pushers list the synced stock
-        for name, spec in PUSHERS.items():
-            settings = cfg.get("pushers", {}).get(name, {})
-            if only is not None and name not in only:
-                continue
-            if only is None and not settings.get("enabled"):
-                continue
-            results.append(run_pusher(name, spec, settings, cfg, a, log_dir))
+            # Even a sync that exits with an error (a pusher failed inside it) has written a fresh books_synced.json
+            # first. Only if it did not, the stock would be out of date: then nothing is pushed from raw stock.
+            fresh = synced.exists() and synced.stat().st_mtime >= t0 - 2
+            if sync["status"] != "FAILED":
+                if synced.exists():
+                    cfg = dict(cfg, json_file=str(synced))     # pushers list the synced stock
+            elif fresh:
+                cfg = dict(cfg, json_file=str(synced))
+            elif sync_cfg.get("on_failure", "skip") == "skip":
+                stop = "the stock sync failed, so the stock would be out of date"
+            else:
+                print("! The stock sync failed: pushing from the UNSYNCED products file (stock_sync.on_failure = continue).")
+            last_sync = time.time()
+        if stop:
+            for name, spec, _ in todo:
+                results.append(failure_result(name, spec["label"], f"not run: {stop}"))
+        else:
+            for name, spec, settings in todo:
+                # a long run must not leave the orders unread for hours: read them again between pushers
+                if sync_on and time.time() - last_sync >= resync_every:
+                    again = run_stock_sync(cfg, a, log_dir, tag="stock_sync_again", label="Stock sync (again)")
+                    last_sync = time.time()
+                    if again["status"] != "OK":
+                        results.append(again)
+                try:
+                    results.append(run_pusher(name, spec, settings, cfg, a, log_dir))
+                except Exception as e:                    # one pusher's crash must not stop the others or the report
+                    results.append(failure_result(name, spec["label"], f"internal error: {type(e).__name__}: {e}"))
     finally:
         LOCK_FILE.unlink(missing_ok=True)
 
@@ -573,15 +682,26 @@ def main():
     failed = any(r["status"] == "FAILED" for r in results)
     reported = [r["key"] for r in orders_rows() if r["new"]]
     when = cfg.get("email", {}).get("when", "always")
-    trouble = failed or any(r["status"] == "PROBLEMS" for r in results) or any(r["needs_you"] for r in orders_rows())
+    trouble = (failed or any(r["status"] in ("PROBLEMS", "NOT CONFIGURED") for r in results)
+               or any(r["needs_you"] for r in orders_rows()))
     if a.no_email or (when == "problems" and not trouble):
         print("\n(no email sent)")
     else:
-        combined = "\n\n".join(f"{'#' * 70}\n# {r['label']}\n{'#' * 70}\n" + r["log"].read_text(encoding="utf-8")
+        combined = "\n\n".join(f"{'#' * 70}\n# {r['label']}\n{'#' * 70}\n" + log_for_email(r["log"])
                                for r in results if r["log"])
+        attachments = [("push_log.txt", combined)] if combined else []
         try:
-            to = send_email(subject, text, html_report(results, started, a.dry_run),
-                            [("push_log.txt", combined)] if combined else [])
+            try:
+                to = send_email(subject, text, html_report(results, started, a.dry_run), attachments)
+            except smtplib.SMTPException as e:
+                if not attachments:
+                    raise
+                # the mail server refused the email with the log attached (too big): send the report without it
+                note = (f"The log attachment was left out because the mail server refused the email with it ({e}). "
+                        f"The full logs are in {log_dir}.")
+                print(f"\n({note})")
+                to = send_email(subject, text + "\n\n" + note,
+                                html_report(results, started, a.dry_run) + f"<p>{html.escape(note)}</p>", [])
             print(f"\nReport emailed to {', '.join(to)}.")
             if reported and not a.dry_run:                  # these orders were in an email: no longer "new"
                 import stock_sync

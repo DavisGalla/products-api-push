@@ -134,14 +134,20 @@ with our sales taken off). It appears as **Stock sync** in the report.
 | `timeout_minutes` | A pusher that runs longer than this is killed and reported as `FAILED`. You can also set it per pusher. |
 | `log_keep_days` | Run folders in `logs/` older than this are deleted at the start of each run (default 60). Other folders in `logs/` are never touched. |
 | `email.to` | Report recipients. The `REPORT_TO` variable overrides it. The default is `GMAIL_ADDRESS`. |
-| `email.when` | `always` sends a report after every run. `problems` sends one only when something was rejected or failed. |
+| `email.when` | `always` sends a report after every run. `problems` sends one only when something was rejected or failed, an order needs you, or a marketplace is switched on but not configured (credentials missing). |
+| `stock_sync.on_failure` | What to do when the stock sync fails and has not written a fresh `books_synced.json`: `skip` (the default) runs no pusher, so nothing is pushed from out-of-date stock; `continue` pushes from the raw products file anyway. |
+| `stock_sync.every_minutes` | In a long run, read the orders again between pushers when this many minutes have passed since the last sync (default 15). |
 | `pushers.<name>.enabled` | Whether this pusher is part of a normal run. |
 | `pushers.<name>.args` | Extra options for that pusher, exactly as on its command line (see its doc). Don't add `--yes`; the runner adds it. |
 
 **2. The credentials.** Store them in **Bitwarden Secrets Manager**, as set out
 in [Where credentials are stored](#where-credentials-are-stored). A `.env` file
 also works, as a simpler alternative. A pusher whose credentials are missing is
-reported as `NOT CONFIGURED` and isn't run.
+reported as `NOT CONFIGURED` and isn't run. It also shows in the email subject
+(`not configured: Vinted`), so a deleted or renamed secret is noticed.
+
+In a `.env` file, a trailing `# comment` after an unquoted value is ignored.
+Put a value that contains ` #` in quotes.
 
 **3. Gmail.** Use a Gmail account just for sending reports, not a personal one.
 Gmail doesn't accept the normal account password from scripts, so create an
@@ -336,13 +342,28 @@ bws run -- python push_all.py --no-email              # real run, report printed
 ```
 
 `--dry-run` runs each pusher in its safe mode: `--validate-only` for Vinted
-and Amazon, `--dry-run` for the rest. Casa del Libro, El Corte Inglés, Carrefour, Worten,
-IBS.it, Empik and E.Leclerc still need credentials in dry-run mode, because they check the catalog. AliExpress
-builds its preview without credentials, but then skips the EAN lookup. Temu and TikTok Shop
-build their previews without credentials too, with placeholders for the category data.
+and Amazon, `--dry-run` for the rest. Vinted and Amazon validate against the API, so they
+need their credentials. Every other pusher builds its preview files without credentials
+(skipping the catalog and EAN lookups, with placeholders for category data where needed).
 
 Exit codes are `0` when everything ran, `1` when a pusher failed, and `2` when
 the report email couldn't be sent. A scheduler can alert on non-zero.
+
+**When something goes wrong, the run still reports.**
+
+- **A typo in `push_all_config.json`** (a text where a number belongs, `"enabled": "yes"`, `args`
+  that isn't a list) stops the run before anything is pushed, with a message naming each setting.
+- **The products file doesn't exist:** one `Products file` row says so, no pusher is started,
+  and the report is emailed.
+- **The stock sync fails:** if it still wrote a fresh `books_synced.json` (a pusher failed inside
+  it), the pushers use that. If not, no pusher runs ("not run: the stock sync failed", each shown
+  as `FAILED`), because the stock would be out of date. `stock_sync.on_failure: "continue"` pushes
+  anyway.
+- **A pusher crashes inside the runner:** it is shown as `FAILED` ("internal error: ...") and the
+  next pusher still runs.
+- **A very big log:** each pusher's log is cut to its first 2,000 and last 300,000 characters in the
+  email attachment (the full log stays in `logs/`). If the mail server still refuses the email, it
+  is sent again without the attachment, with a note.
 
 ## Running it on a server
 
