@@ -41,6 +41,7 @@ class S:  # recorded mock state
         cls.by_market = {}
         cls.policy_markets = None
         cls.stock_updates = []
+        cls.fail = None   # {"match": "POST /sell/...", "status": 429, "left": n, "hits": 0}: fail the next n matching calls
 
 
 CURRENCY = {"EBAY_GB": "GBP", "EBAY_CH": "CHF", "EBAY_PL": "PLN"}   # all other EU sites: EUR
@@ -73,6 +74,12 @@ class Handler(BaseHTTPRequestHandler):
             if u.path.startswith("/img/"):
                 return self.send(200, b"\xff\xd8\xff\xe0 fake jpeg", "image/jpeg")
             if u.path.startswith(("/identity/", "/sell/", "/commerce/")):
+                f = S.fail
+                if f and f["match"] in f"{method} {u.path}":
+                    f["hits"] += 1
+                    if f["left"] > 0:
+                        f["left"] -= 1
+                        return self.send(f["status"], {"errors": [{"message": "injected failure"}]})
                 return self.ebay(method, u, body)
             self.send(404, {"error": "no route"})
         except Exception as e:  # surface mock bugs as 500s
@@ -209,6 +216,7 @@ _orig = m.Ebay.__init__
 def _init(self, *a, **k):
     _orig(self, *a, **k); self.host = {BASE!r}
 m.Ebay.__init__ = _init
+m.RETRY_SECONDS = (0, 0, 0)   # no waiting between retries in tests
 from ebay_push import main"""
 
 RAW = json.loads(PRODUCTS_FILE.read_text(encoding="utf-8"))
@@ -344,6 +352,51 @@ def test_ebay():
               cat("EBAY_ES", "C-NONE") == "261186", f"{cat('EBAY_ES', 'C-NONE')}")
         check("ebay_category in the JSON beats the mapping on every site",
               cat("EBAY_ES", "C-OVR") == "999" and cat("EBAY_DE", "C-OVR") == "999")
+
+    # ---- sandbox keys and production keys must not be mixed up
+    with tempfile.TemporaryDirectory() as tmp:
+        S.reset()
+        sbx = dict(EBAY_ENV, EBAY_CLIENT_ID="Name-app-SBX-0123456789-abcdef01")
+        prd = dict(EBAY_ENV, EBAY_CLIENT_ID="Name-app-PRD-0123456789-abcdef01")
+        rc, out = run(EBAY_WRAPPER, [pf, "--market", "EBAY_ES", "--yes"], tmp, sbx)
+        check("sandbox key in a real run: refused, nothing created",
+              rc != 0 and "SANDBOX key" in out and not S.ebay_published and not S.ebay_inventory, out[-300:])
+        rc, out = run(EBAY_WRAPPER, [pf, "--market", "EBAY_ES", "--yes", "--sandbox"], tmp, prd)
+        check("production key with --sandbox: refused, nothing created",
+              rc != 0 and "PRODUCTION key" in out and not S.ebay_published, out[-300:])
+        rc, out = run(EBAY_WRAPPER, [pf, "--market", "EBAY_ES", "--yes", "--sandbox"], tmp, sbx)
+        # the mock server only knows the client id "cid", so this run ends at its login (invalid_client):
+        # what counts is that the mix-up guard did not stop it before that
+        check("sandbox key with --sandbox: not stopped by the guard, goes on to log in",
+              "SANDBOX key" not in out and "PRODUCTION key" not in out and "invalid_client" in out, out[-300:])
+
+    # ---- throttling and server hiccups
+    with tempfile.TemporaryDirectory() as tmp:
+        one = Path(tmp) / "one.json"
+        one.write_text(json.dumps([{"id": "R-1", "title": "Libro de reintentos", "price_eur": 9, "author": "A. Autor",
+                                    "image": "https://example.com/1.jpg"}]), encoding="utf-8")
+
+        def attempt(fail, cwd):
+            S.reset()
+            S.fail = fail
+            return run(EBAY_WRAPPER, [str(one), "--market", "EBAY_ES", "--yes"], cwd, EBAY_ENV)
+
+        with tempfile.TemporaryDirectory() as w:
+            rc, out = attempt({"match": "POST /sell/inventory/v1/offer/", "status": 429, "left": 1, "hits": 0}, w)
+            check("429 on publish: retried, book published", "R-1" in S.ebay_published and "retrying" in out, out[-300:])
+        with tempfile.TemporaryDirectory() as w:
+            rc, out = attempt({"match": "PUT /sell/inventory/v1/inventory_item", "status": 503, "left": 1, "hits": 0}, w)
+            check("503 on a PUT: retried, book published", "R-1" in S.ebay_published and "retrying" in out, out[-300:])
+        with tempfile.TemporaryDirectory() as w:
+            rc, out = attempt({"match": "POST /sell/inventory/v1/offer/", "status": 503, "left": 1, "hits": 0}, w)
+            check("503 on publish (a POST): not repeated, reported as failed",
+                  "R-1" not in S.ebay_published and "retrying" not in out and "failed" in out, out[-300:])
+        with tempfile.TemporaryDirectory() as w:
+            f = {"match": "PUT /sell/inventory/v1/inventory_item", "status": 429, "left": 99, "hits": 0}
+            rc, out = attempt(f, w)
+            check("throttled for good: gives up after 4 tries and reports the book as failed",
+                  f["hits"] == 4 and "R-1" not in S.ebay_published and "failed" in out, f"hits {f['hits']}: {out[-300:]}")
+        S.fail = None
 
     with tempfile.TemporaryDirectory() as tmp:
         rc, out = run(EBAY_WRAPPER, [pf, "--markets", "eur", "--dry-run"], tmp, show=False)

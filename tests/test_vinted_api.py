@@ -192,13 +192,13 @@ def check(name, ok, detail=""):
     print(f"  {'PASS' if ok else 'FAIL'}  {name}" + (f"\n          -> {detail}" if detail and not ok else ""))
 
 
-def run(wrapper, args, cwd, env_extra=None, show=True):
+def run(wrapper, args, cwd, env_extra=None, show=True, stdin=""):
     """Run a pusher in a subprocess (so its sys.exit/argparse behave normally)."""
     env = {k: v for k, v in os.environ.items() if not k.startswith("VINTED_")}
     env.update(PYTHONPATH=str(ROOT), PYTHONIOENCODING="utf-8", **(env_extra or {}))
     code = wrapper + f"\nimport sys\nsys.argv = {['x'] + list(args)!r}\nmain()\n"
     r = subprocess.run([sys.executable, "-c", code], cwd=cwd, env=env, capture_output=True,
-                       text=True, encoding="utf-8", timeout=300)
+                       text=True, encoding="utf-8", timeout=300, input=stdin)
     out = r.stdout + r.stderr
     if show:
         print("    $ " + " ".join(args))
@@ -230,7 +230,11 @@ def test_vinted_api():
         check("validate-only creates nothing", rc == 0 and not S.vinted_items, out[-300:])
         check(f"validate-only: {len(expected)}/{len(expected)} valid", f"{len(expected)}/{len(expected)} valid" in out, out[-300:])
 
-        rc, out = run(VINTED_API_WRAPPER, args, tmp)
+        rc, out = run(VINTED_API_WRAPPER, args, tmp, stdin="no\n")
+        check("push without --yes asks first; answering 'no' creates nothing",
+              not S.vinted_items and "LIVE item(s)" in out and "Cancelled" in out, out[-300:])
+
+        rc, out = run(VINTED_API_WRAPPER, args + ["--yes"], tmp)
         refs = {it["item_reference"] for it in S.vinted_items.values()}
         check("push: correct items created", refs == expected, f"created {sorted(refs)}, expected {sorted(expected)}")
         check("push: sold-out / no-image / no-price / short-title skipped",
@@ -252,7 +256,7 @@ def test_vinted_api():
         check("posted_api.json records every created item", set(state) == expected)
 
         n = len(S.vinted_items)
-        rc, out = run(VINTED_API_WRAPPER, args, tmp)
+        rc, out = run(VINTED_API_WRAPPER, args + ["--yes"], tmp)
         check("re-run does not push duplicates", len(S.vinted_items) == n and "0 item(s) to push" in out, out[-300:])
 
         rc, out = run(VINTED_API_WRAPPER, ["status", "--token", VINTED_TOKEN], tmp)
@@ -263,7 +267,7 @@ def test_vinted_api():
     with tempfile.TemporaryDirectory() as tmp:
         S.reset()
         rc, out = run(VINTED_API_WRAPPER, ["push", pf, "--token", VINTED_TOKEN, "--catalog-id", "2312",
-                                           "--package-size-id", "1"], tmp)
+                                           "--package-size-id", "1", "--yes"], tmp)
         check("non-leaf catalog: API errors shown, nothing created",
               not S.vinted_items and "leaf catalog" in out, out[-300:])
 

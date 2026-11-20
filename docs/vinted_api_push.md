@@ -85,6 +85,7 @@ python vinted_api_push.py push [json_file] --catalog-id 2320 --package-size-id 1
 | `--draft` | off | Creates drafts instead of live listings. |
 | `--validate-only` | off | Asks Vinted to validate the items and creates nothing. |
 | `--limit N` | `0` (all) | Pushes at most N items in this run. |
+| `--yes` | off | Skips the "Type 'yes'" question that appears before live items are created. The question isn't asked for `--validate-only` or `--draft`. `push_all.py` passes it automatically. |
 
 What happens during a push:
 

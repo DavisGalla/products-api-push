@@ -47,7 +47,7 @@ LOCK_MAX_AGE = 6 * 3600  # an older lock is treated as left over from a crash
 # name -> how to run it. "sub": the script uses a `push` subcommand.
 # "dry": the flags for its safe mode (used with --dry-run).
 PUSHERS = {
-    "vinted": dict(label="Vinted", script="vinted_api_push.py", sub=True, yes=False,
+    "vinted": dict(label="Vinted", script="vinted_api_push.py", sub=True, yes=True,
                    state="posted_api.json", dry=["--validate-only"],
                    env=["VINTED_PRO_TOKEN"]),
     "ebay": dict(label="eBay", script="ebay_push.py", sub=False, yes=True,

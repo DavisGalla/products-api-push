@@ -106,6 +106,13 @@ Ctrl+X. The token never appears on screen or in the shell history.
 - **Prefer a separate token for the server.** In Bitwarden you can create a
   second access token on the same machine account just for the server, so
   you can revoke it alone if needed.
+- **The machine account must read only the real project.** The jobs run
+  `bws run --`, which injects every secret the account can read. If the same
+  account can also read a sandbox project (for example
+  `product-pusher-sandbox`, with its own `EBAY_*` keys), the sandbox keys end up
+  in the real runs. Give the sandbox project its own machine account, and run
+  sandbox tests with `bws run --project-id <sandbox project id> -- ...` using
+  that account's token.
 
 ## 5. Configure
 

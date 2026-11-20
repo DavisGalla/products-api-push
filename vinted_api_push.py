@@ -34,6 +34,7 @@ import time
 import urllib.error
 import urllib.request
 from pathlib import Path
+from book_data import clean_price
 
 # ============================== SETTINGS ==============================
 # Path to your products JSON file. Used when you don't pass one on the
@@ -127,6 +128,7 @@ def normalize(raw):
     """Map scraper JSON (Correos Market style) or the simple format to API fields."""
     if "price_eur" not in raw and "price" in raw:  # simple format
         p = dict(raw)
+        p["price"] = clean_price(p.get("price"))
         p.setdefault("image_urls", p.get("photo_urls", []))
         return p
     desc = (raw.get("description") or "").strip()
@@ -134,7 +136,7 @@ def normalize(raw):
         "sku": raw.get("id"),
         "title": (raw.get("title") or "")[:100],
         "description": desc,
-        "price": raw.get("price_eur"),
+        "price": clean_price(raw.get("price_eur")),
         "brand": raw.get("brand"),
         "isbn": raw.get("isbn"),
         "condition": raw.get("condition"),
@@ -271,6 +273,10 @@ def cmd_push(api, args):
     print(f"{len(todo)} item(s) to {'validate' if args.validate_only else 'push'}.")
     if not todo:
         return
+    if not (args.validate_only or args.draft or args.yes):
+        if input(f"This will create {len(todo)} LIVE item(s) on Vinted. Type 'yes': ").strip().lower() != "yes":
+            print("Cancelled, nothing was created.")
+            return
 
     for batch in chunks(todo, BATCH):
         code, data = api.request("POST", "/api/v1/items/validate", {"items": batch})
@@ -345,6 +351,7 @@ def main():
     p.add_argument("--draft", action="store_true", help="create as drafts instead of live listings")
     p.add_argument("--validate-only", action="store_true", help="only call the validate endpoint")
     p.add_argument("--limit", type=int, default=0, help="max items this run (0 = all)")
+    p.add_argument("--yes", action="store_true", help="skip the confirmation prompt before live items are created")
 
     sub.add_parser("status", parents=[common], help="refresh status of pushed items")
 

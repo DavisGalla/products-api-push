@@ -32,7 +32,6 @@ NOTE: new books in Germany have a legally fixed price (Buchpreisbindung).
 booklooker rejects new books whose price differs from the fixed price.
 """
 import argparse
-import io
 import json
 import os
 import sys
@@ -41,6 +40,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 import requests
+from book_data import clean_price
 
 # ============================== SETTINGS ==============================
 # Products JSON used when you don't pass one on the command line.
@@ -192,7 +192,7 @@ def normalize(raw):
         "sku": str(raw.get("sku") or raw.get("id") or "")[:50],
         "title": (raw.get("title") or "").strip(),
         "description": (raw.get("description") or "").strip(),
-        "price": raw.get("price_eur", raw.get("price")),
+        "price": clean_price(raw.get("price_eur", raw.get("price"))),
         "isbn": to_isbn(raw.get("isbn") or raw.get("ean")),
         "raw_code": raw.get("isbn") or raw.get("ean"),
         "condition": raw.get("condition") or "NewCondition",

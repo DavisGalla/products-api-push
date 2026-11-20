@@ -38,6 +38,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import requests
+from book_data import clean_price
 
 # ============================== SETTINGS ==============================
 # Products JSON used when you don't pass one on the command line.
@@ -143,7 +144,7 @@ def normalize(raw):
         "title": (raw.get("title") or "").strip(),
         "author": (raw.get("author") or "").strip(),
         "publisher": (raw.get("publisher") or raw.get("brand") or "").strip(),
-        "price": raw.get("price_eur", raw.get("price")),
+        "price": clean_price(raw.get("price_eur", raw.get("price"))),
         "isbn": str(raw.get("isbn") or "").replace("-", "").replace(" ", ""),
         "description": (raw.get("description") or "").strip(),
         "condition": raw.get("condition") or "NewCondition",

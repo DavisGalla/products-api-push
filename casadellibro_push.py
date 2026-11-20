@@ -39,6 +39,7 @@ import time
 from pathlib import Path
 
 import requests
+from book_data import clean_price
 
 # ============================== SETTINGS ==============================
 # Products JSON used when you don't pass one on the command line.
@@ -171,7 +172,7 @@ def normalize(raw):
     return {
         "sku": str(raw.get("sku") or raw.get("id") or "")[:40],
         "title": raw.get("title") or "",
-        "price": raw.get("price_eur", raw.get("price")),
+        "price": clean_price(raw.get("price_eur", raw.get("price"))),
         "ean": to_ean(raw.get("isbn") or raw.get("ean")),
         "raw_code": raw.get("isbn") or raw.get("ean"),
         "condition": raw.get("condition") or "NewCondition",
@@ -374,7 +375,12 @@ def main():
     p.add_argument("--poll", type=int, default=15, help="seconds between import status checks")
     sub.add_parser("status", help="list your offers on Casa del Libro")
     a = ap.parse_args()
-    api = Mirakl()
+    if a.cmd == "push" and a.dry_run and not (os.environ.get("CASADELLIBRO_API_URL") and os.environ.get("CASADELLIBRO_API_KEY")):
+        print("(dry run without credentials: catalog check skipped)")
+        a.no_match_check = True  # the catalog lookup needs the API
+        api = None
+    else:
+        api = Mirakl()
     {"check": cmd_check, "states": cmd_states, "push": cmd_push, "status": cmd_status}[a.cmd](api, a)
 
 

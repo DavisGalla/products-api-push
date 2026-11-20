@@ -50,6 +50,8 @@ from pathlib import Path
 
 import requests
 
+from book_data import clean_price
+
 STATE_FILE = Path("ebay_posted.json")
 
 # marketplace -> (taxonomy tree id, Content-Language, currency)
@@ -87,6 +89,9 @@ ASPECT_NAMES = {
     "nl": {"title": "Titel", "author": "Auteur", "publisher": "Uitgever", "language": "Taal"},
     "pl": {"title": "Tytuł książki", "author": "Autor", "publisher": "Wydawca", "language": "Język"},
 }
+# Seconds to wait before the 2nd, 3rd and 4th try when eBay throttles (429) or has a hiccup.
+RETRY_SECONDS = (2, 4, 8)
+
 # ---- book categories ------------------------------------------------------
 # Checked in the sandbox's taxonomy API. ebay.de/.at/.ch/.co.uk/.ie/.pl have one
 # plain "Books" category. ebay.es/.fr/.it/.nl/.be split books into fiction,
@@ -157,6 +162,7 @@ def market_price(price_eur, currency):
 class Ebay:
     def __init__(self, sandbox, market):
         self.host = "https://api.sandbox.ebay.com" if sandbox else "https://api.ebay.com"
+        self.sandbox = sandbox
         self.market = market
         self.tree, self.lang, self.currency = MARKETS[market]
         self.token = None
@@ -177,6 +183,15 @@ class Ebay:
         return r.json()["access_token"]
 
     def login(self):
+        # eBay puts -SBX- (sandbox) or -PRD- (production) in the App ID. Stop on a mix-up, e.g. sandbox
+        # keys leaking into a real run through a Bitwarden machine account that can read both projects.
+        cid = os.environ.get("EBAY_CLIENT_ID", "")
+        if "-SBX-" in cid and not self.sandbox:
+            sys.exit("EBAY_CLIENT_ID is a SANDBOX key (it contains '-SBX-') but this is a real run. "
+                     "Add --sandbox, or use the production keys. Nothing was sent to eBay.")
+        if "-PRD-" in cid and self.sandbox:
+            sys.exit("EBAY_CLIENT_ID is a PRODUCTION key (it contains '-PRD-') but --sandbox was given. "
+                     "Use the sandbox keys. Nothing was sent to eBay.")
         self.token = self._token_call({
             "grant_type": "refresh_token",
             "refresh_token": os.environ["EBAY_REFRESH_TOKEN"],
@@ -195,7 +210,20 @@ class Ebay:
             "Content-Language": self.lang,
             "X-EBAY-C-MARKETPLACE-ID": self.market,
         }
-        r = requests.request(method, self.host + path, headers=headers, json=body, params=params, timeout=60)
+        for attempt in range(len(RETRY_SECONDS) + 1):
+            r = requests.request(method, self.host + path, headers=headers, json=body, params=params, timeout=60)
+            # 429 = throttled, the request wasn't processed, so any call can be repeated. A server
+            # error is only repeated for reads and updates: repeating a POST (create / publish)
+            # could create a duplicate or report a false failure.
+            again = r.status_code == 429 or (r.status_code in (500, 502, 503, 504) and method in ("GET", "PUT"))
+            if not again or attempt == len(RETRY_SECONDS):
+                break
+            wait = RETRY_SECONDS[attempt]
+            hint = r.headers.get("Retry-After", "")
+            if hint.isdigit():
+                wait = max(wait, min(int(hint), 60))
+            print(f"   (eBay returned {r.status_code}, retrying in {wait}s)")
+            time.sleep(wait)
         if r.status_code not in ok:
             raise RuntimeError(f"{method} {path} -> {r.status_code}: {r.text[:800]}")
         return r.json() if r.content else {}
@@ -226,12 +254,12 @@ class Ebay:
 def normalize(raw):
     """Accept the scraper's JSON (Correos Market) or an already simple format."""
     desc_html = raw.get("description_html")
-    desc = raw.get("description", "")
+    desc = raw.get("description") or ""   # the scraper writes null for a book without a description
     return {
         "sku": str(raw.get("sku") or raw.get("id") or "")[:50],
         "title": (raw.get("title") or "")[:80],  # eBay title limit
         "description_html": desc_html or "<br>".join(html.escape(l) for l in desc.splitlines()),
-        "price": raw.get("price_eur", raw.get("price")),
+        "price": clean_price(raw.get("price_eur", raw.get("price"))),
         "brand": raw.get("brand"),
         "isbn": raw.get("isbn"),
         "author": raw.get("author"),
@@ -373,7 +401,7 @@ def apply_stock_updates(eb, updates, state):
                 state[key]["quantity"] = q
                 done += 1
                 print(f"   {key}: stock {q}" + ("  (sold out)" if q == 0 else "  (back in stock)"))
-        STATE_FILE.write_text(json.dumps(state, indent=2))
+        STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
     return done
 
 
@@ -422,7 +450,7 @@ def main():
     raw = json.loads(Path(a.json_file).read_text(encoding="utf-8"))
     if isinstance(raw, dict):
         raw = raw.get("products", [])
-    state = json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
+    state = json.loads(STATE_FILE.read_text(encoding="utf-8")) if STATE_FILE.exists() else {}
 
     products = []
     for i, r in enumerate(raw, 1):
@@ -519,7 +547,7 @@ def main():
                 res = push_one(eb, p, a, ctx)
                 if res:
                     state[key] = res
-                    STATE_FILE.write_text(json.dumps(state, indent=2))
+                    STATE_FILE.write_text(json.dumps(state, indent=2), encoding="utf-8")
                     print("   ok:", res)
             except Exception as e:
                 print(f"   ! failed: {e}")

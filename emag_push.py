@@ -40,6 +40,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 import requests
+from book_data import clean_price
 
 # ============================== SETTINGS ==============================
 # Products JSON used when you don't pass one on the command line.
@@ -195,7 +196,7 @@ def normalize(raw):
     return {
         "sku": str(raw.get("sku") or raw.get("id") or ""),
         "title": " ".join((raw.get("title") or "").split()),
-        "price": raw.get("price_eur", raw.get("price")),
+        "price": clean_price(raw.get("price_eur", raw.get("price"))),
         "ean": to_ean(raw.get("isbn") or raw.get("ean")),
         "raw_code": raw.get("isbn") or raw.get("ean"),
         "condition": raw.get("condition") or "NewCondition",

@@ -81,6 +81,7 @@ FAKES = {
 import json, sys
 from pathlib import Path
 assert sys.argv[1] == "push", sys.argv
+assert "--yes" in sys.argv, sys.argv   # unattended runs must not hit the confirmation prompt
 s = Path("posted_api.json"); st = json.loads(s.read_text()) if s.exists() else {}
 print("[1] already pushed: Old book")
 print("[2] SKIP 'No price': no price")

@@ -61,6 +61,7 @@ import urllib.parse
 import urllib.request
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
+from book_data import clean_price
 
 # ============================== SETTINGS ==============================
 # Products JSON used when you don't pass one on the command line.
@@ -451,7 +452,7 @@ def normalize(raw):
         "description": raw.get("description") or "",
         "brand": (raw.get("brand") or raw.get("publisher") or "").strip(),
         "category": raw.get("category") or "",
-        "price": raw.get("price_eur", raw.get("price")),
+        "price": clean_price(raw.get("price_eur", raw.get("price"))),
         "gtin": to_gtin(raw.get("isbn") or raw.get("ean")),
         "raw_code": raw.get("isbn") or raw.get("ean"),
         "condition": raw.get("condition") or "NewCondition",

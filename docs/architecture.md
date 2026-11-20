@@ -220,8 +220,8 @@ credentials, and doesn't contact any real API:
 
 | Test | What is faked | Checks |
 |---|---|---|
-| `test_vinted_api.py` | Vinted Pro API (including HMAC signature verification) | 15 |
-| `test_ebay.py` | eBay APIs (one site and several sites per run: per-site policies, currency conversion, language aspect; stock 0 / restore with bulk_update_price_quantity) | 22 |
+| `test_vinted_api.py` | Vinted Pro API (including HMAC signature verification, confirmation before live items) | 16 |
+| `test_ebay.py` | eBay APIs (one site and several sites per run: per-site policies, currency conversion, aspect names per site language, book categories per site, author warning; stock 0 / restore with bulk_update_price_quantity; retry on 429 / 5xx; sandbox and production keys not mixed up) | 37 |
 | `test_amazon.py` | SP-API: Catalog, Listings (incl. stock patch), Login with Amazon | 24 |
 | `test_casadellibro.py` | Mirakl API (incl. stock 0 / restore) | 23 |
 | `test_fnac.py` | Fnac XML API | 17 |
@@ -250,7 +250,10 @@ credentials, and doesn't contact any real API:
 | `test_order_readers.py` | Order readers for bol.com, Cdiscount, Allegro, OTTO, eMAG, CDON, OnBuy, booklooker, Fruugo, Vinted, Temu, TikTok (filters, paging, SKU/EAN mapping, cancellations) | 27 |
 | `test_orders.py` | Order handling: automatic accept (Mirakl OR21 mock, Cdiscount, eMAG), double sales, by-hand orders, email Orders section | 12 |
 | `test_push_all.py` | Fake pushers + fake mail server (incl. log cleanup) | 25 |
-| **Total** | | **697, all passing** |
+| `test_sandbox_state.py` | Each pusher with a sandbox mode keeps its own state, token and cache files, never the real ones | 17 |
+| `test_dry_run_offline.py` | Every pusher's `push --dry-run` works with no credentials | 23 |
+| `test_book_data.py` | The shared price reader (`book_data.clean_price`): text prices, bad input, zero and negative | 55 |
+| **Total** | | **808, all passing** |
 
 The fakes enforce the rules from each marketplace's documentation: required
 fields, limits, error codes, and asynchronous processing.
